@@ -1,0 +1,62 @@
+{
+  "name": "workspace-storage-cleanup",
+  "displayName": "Workspace Storage Cleanup",
+  "version": "1.0.0",
+  "description": "Remove workspace storage folders which are linked to non-existent folders",
+  "icon": "img/icon.png",
+  "publisher": "mehyaa",
+  "license": "MIT",
+  "homepage": "https://github.com/mehyaa/vscode-workspace-storage-cleanup",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mehyaa/vscode-workspace-storage-cleanup.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mehyaa/vscode-workspace-storage-cleanup/issues"
+  },
+  "main": "dist/extension.js",
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist/*",
+    "img/*"
+  ],
+  "engines": {
+    "vscode": "^1.0.0"
+  },
+  "activationEvents": [
+    "onCommand:workspace-storage-cleanup.run"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "workspace-storage-cleanup.run",
+        "title": "Workspaces: Cleanup Storage"
+      }
+    ]
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
+  "scripts": {
+    "clean": "rimraf dist",
+    "compile": "npm run clean && tsc",
+    "watch": "npm run clean && tsc --watch",
+    "vscode:prepublish": "npm run compile",
+    "lint": "eslint --ext ts src",
+    "postinstall": "vscode-install"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.62.0",
+    "@types/node": "14.x",
+    "@typescript-eslint/eslint-plugin": "^5.3.1",
+    "@typescript-eslint/parser": "^5.3.1",
+    "eslint": "^8.2.0",
+    "typescript": "^4.4.4",
+    "vscode": "^1.1.37"
+  }
+}
