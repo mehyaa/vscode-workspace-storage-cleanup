@@ -22,7 +22,7 @@
     "img/*"
   ],
   "engines": {
-    "vscode": "^1.0.0"
+    "vscode": "^1.62.0"
   },
   "activationEvents": [
     "onCommand:workspace-storage-cleanup.run"
