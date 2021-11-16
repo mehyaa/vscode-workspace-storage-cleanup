@@ -23,90 +23,86 @@ interface IWorkspaceInfo {
   path?: string;
   pathExists?: boolean;
   url?: string;
+  note?: string;
 }
 
 export function activate(context: ExtensionContext) {
   context.subscriptions.push(
     commands.registerCommand(
       'workspace-storage-cleanup.run',
-      getRunCommandHandler(context)
+      () => {
+        const globalStoragePath = dirname(context.globalStorageUri.fsPath);
+
+        if (!globalStoragePath || !existsSync(globalStoragePath)) {
+          window.showErrorMessage('Could not find global storage path.');
+
+          return;
+        }
+
+        const userPath = dirname(globalStoragePath);
+
+        const workspaceStoragePath = joinPath(userPath, 'workspaceStorage');
+
+        const workspaces = getWorkspaces(workspaceStoragePath);
+
+        const panel =
+          window.createWebviewPanel(
+            'workspace-storage-cleanup.run',
+            'Workspace Storage',
+            ViewColumn.One,
+            {
+              enableScripts: true
+            }
+          );
+
+        panel.webview.html = getWebviewContent(workspaces);
+
+        function updateWebview() {
+          panel.webview.html = getWebviewContent(getWorkspaces(workspaceStoragePath));
+        }
+
+        // Handle messages from the webview
+        panel.webview.onDidReceiveMessage(
+          message => {
+            if (message.command === 'delete' && message.selectedWorkspaces?.length > 0) {
+              const errorMessages: string[] = [];
+
+              for (const workspace of message.selectedWorkspaces) {
+                const dirPath = joinPath(workspaceStoragePath, workspace);
+
+                try {
+                  rmdirSync(dirPath, { recursive: true });
+                } catch (err) {
+                  const error = err as Error;
+
+                  if (error) {
+                    errorMessages.push(error.message);
+                  }
+                }
+              }
+
+              if (errorMessages.length > 0) {
+                window.showErrorMessage(errorMessages.join('\n'));
+              }
+
+              updateWebview();
+            }
+          },
+          void 0,
+          context.subscriptions
+        );
+      }
     )
   )
 }
 
 export function deactivate() { } // eslint-disable-line @typescript-eslint/no-empty-function
 
-function getRunCommandHandler(context: ExtensionContext) {
-  return () => {
-    const globalStoragePath = dirname(context.globalStorageUri.fsPath);
-
-    if (!globalStoragePath || !existsSync(globalStoragePath)) {
-      window.showErrorMessage('Could not find global storage path.');
-
-      return;
-    }
-
-    const userPath = dirname(globalStoragePath);
-
-    const workspaceStoragePath = joinPath(userPath, 'workspaceStorage');
-
-    const workspaces = getWorkspaces(workspaceStoragePath);
-
-    const panel =
-      window.createWebviewPanel(
-        'workspace-storage-cleanup.run',
-        'Workspace Storage',
-        ViewColumn.One,
-        {
-          enableScripts: true
-        }
-      );
-
-    panel.webview.html = getWebviewContent(workspaces);
-
-    function updateWebview() {
-      panel.webview.html = getWebviewContent(getWorkspaces(workspaceStoragePath));
-    }
-
-    // Handle messages from the webview
-    panel.webview.onDidReceiveMessage(
-      message => {
-        if (message.command === 'delete' && message.selectedWorkspaces?.length > 0) {
-          const errorMessages: string[] = [];
-
-          for (const workspace of message.selectedWorkspaces) {
-            const dirPath = joinPath(workspaceStoragePath, workspace);
-
-            try {
-              rmdirSync(dirPath, { recursive: true });
-            } catch (err) {
-              const error = err as Error;
-
-              if (error) {
-                errorMessages.push(error.message);
-              }
-            }
-          }
-
-          if (errorMessages.length > 0) {
-            window.showErrorMessage(errorMessages.join('\n'));
-          }
-
-          updateWebview();
-        }
-      },
-      void 0,
-      context.subscriptions
-    );
-  }
-}
-
 function getWorkspaces(workspaceStoragePath: string): IWorkspaceInfo[] {
   const directories =
     readdirSync(workspaceStoragePath, { withFileTypes: true })
       .filter(dir => dir.isDirectory())
       .map(dir => dir.name);
-
 
   const workspaces: IWorkspaceInfo[] = [];
 
@@ -116,18 +112,33 @@ function getWorkspaces(workspaceStoragePath: string): IWorkspaceInfo[] {
     const workspaceInfoPath = joinPath(dirPath, 'workspace.json');
 
     if (!existsSync(workspaceInfoPath)) {
+      workspaces.push({
+        name: dir,
+        note: `No workspace.json under ${dirPath}`
+      });
+
       continue;
     }
 
     const workspaceInfo = JSON.parse(readFileSync(workspaceInfoPath, 'utf8'));
 
     if (!workspaceInfo.folder) {
+      workspaces.push({
+        name: dir,
+        note: `No workspace uri in ${workspaceInfoPath}`
+      });
+
       continue;
     }
 
     const workspacePathUri = Uri.parse(workspaceInfo.folder);
 
     if (!workspacePathUri) {
+      workspaces.push({
+        name: dir,
+        note: `Invalid workspace URI (${workspaceInfo.folder}) in ${workspaceInfoPath}`
+      });
+
       continue;
     }
 
@@ -159,36 +170,75 @@ function getWorkspaces(workspaceStoragePath: string): IWorkspaceInfo[] {
     }
   }
 
-  workspaces.sort(
-    (a: IWorkspaceInfo, b: IWorkspaceInfo) =>
-      ((a.path ?? a.url ?? '') > (b.path ?? b.url ?? ''))
-        ? 1
-        : (((b.path ?? b.url ?? '') > (a.path ?? a.url ?? ''))
-          ? -1
-          : 0));
+  workspaces.sort(sortWorkspaceInfoArray);
 
   return workspaces;
 }
 
+function sortWorkspaceInfoArray(first: IWorkspaceInfo, second: IWorkspaceInfo): number {
+  const firstValue = first.path ?? first.url ?? first.note ?? '';
+  const secondValue = second.path ?? second.url ?? second.note ?? '';
+
+  if (firstValue > secondValue) {
+    return 1;
+  }
+
+  if (firstValue < secondValue) {
+    return -1;
+  }
+
+  if (first.name > second.name) {
+    return 1;
+  }
+
+  if (first.name < second.name) {
+    return -1;
+  }
+
+  return 0;
+}
+
 function getWebviewContent(workspaces: IWorkspaceInfo[]) {
-  const tbody =
-    workspaces
-      .map(w =>
-        w.url
-          ? `
+  const rows: string[] = [];
+
+  for (const workspace of workspaces) {
+    if (workspace.path) {
+      const icon = !workspace.pathExists ? ' ❌' : '';
+
+      rows.push(`
         <tr>
-          <td><input class="check" type="checkbox" value="${w.name}"></td>
-          <td>${w.name}</td>
-          <td colspan="2">${w.url}</td>
-        </tr>`
-          : `
+          <td><input class="check" type="checkbox" value="${workspace.name}"></td>
+          <td>${workspace.name}</td>
+          <td>${workspace.path}${icon}</td>
+          <td>
+            <a href="javascript:;" onclick="delete('${workspace.name}')">Delete</a>
+          </td>
+        </tr>`);
+    }
+    else if (workspace.url) {
+      rows.push(`
         <tr>
-          <td><input class="check" type="checkbox" value="${w.name}"></td>
-          <td>${w.name}</td>
-          <td>${w.path}</td>
-          <td>${w.pathExists === true ? '✔️' : '❌'}</td>
-        </tr>`)
-      .join('\n');
+          <td><input class="check" type="checkbox" value="${workspace.name}"></td>
+          <td>${workspace.name}</td>
+          <td>${workspace.url}</td>
+          <td>
+            <a href="javascript:;" onclick="delete('${workspace.name}')">Delete</a>
+          </td>
+        </tr>`);
+    }
+    else {
+      rows.push(`
+        <tr>
+          <td><input class="check" type="checkbox" value="${workspace.name}"></td>
+          <td>${workspace.name}</td>
+          <td>${workspace.note}</td>
+          <td>
+            <a href="javascript:;" onclick="delete('${workspace.name}')">Delete</a>
+          </td>
+        </tr>`);
+    }
+  }
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -203,22 +253,33 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
           <th></th>
           <th>Name</th>
           <th>Path / URL</th>
-          <th>Path Exists</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
-        ${tbody}
+        ${rows.join('\n')}
+        <tr>
+          <td></td>
+          <td colspan="3">${workspaces.length} item(s) listed.</td>
+        </tr>
       </tbody>
     </table>
 
     <br />
 
-    <button onclick="onDelete()">Delete</button>
+    <button onclick="deleteSelected()">Delete</button>
 
     <script>
       vscode = acquireVsCodeApi();
 
-      function onDelete() {
+      function delete(workspace) {
+        vscode.postMessage({
+          command: 'delete',
+          selectedWorkspaces: [workspace]
+        });
+      }
+
+      function deleteSelected() {
         const selectedWorkspaces =
           Array.prototype.map.call(
             document.querySelectorAll(
@@ -228,7 +289,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
         vscode.postMessage({
           command: 'delete',
           selectedWorkspaces: selectedWorkspaces
-        })
+        });
       }
     </script>
 </body>
