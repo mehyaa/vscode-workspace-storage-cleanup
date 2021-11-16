@@ -211,7 +211,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
           <td>${workspace.name}</td>
           <td>${workspace.path}${icon}</td>
           <td>
-            <a href="javascript:;" onclick="delete('${workspace.name}')">Delete</a>
+            <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
           </td>
         </tr>`);
     }
@@ -222,7 +222,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
           <td>${workspace.name}</td>
           <td>${workspace.url}</td>
           <td>
-            <a href="javascript:;" onclick="delete('${workspace.name}')">Delete</a>
+            <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
           </td>
         </tr>`);
     }
@@ -233,7 +233,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
           <td>${workspace.name}</td>
           <td>${workspace.note}</td>
           <td>
-            <a href="javascript:;" onclick="delete('${workspace.name}')">Delete</a>
+            <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
           </td>
         </tr>`);
     }
@@ -267,19 +267,19 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
 
     <br />
 
-    <button onclick="deleteSelected()">Delete</button>
+    <button onclick="onDeleteSelected()">Delete</button>
 
     <script>
-      vscode = acquireVsCodeApi();
+      var vscode = acquireVsCodeApi();
 
-      function delete(workspace) {
+      function onDelete(workspace) {
         vscode.postMessage({
           command: 'delete',
           selectedWorkspaces: [workspace]
         });
       }
 
-      function deleteSelected() {
+      function onDeleteSelected() {
         const selectedWorkspaces =
           Array.prototype.map.call(
             document.querySelectorAll(
