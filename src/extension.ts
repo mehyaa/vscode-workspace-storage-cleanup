@@ -122,52 +122,82 @@ function getWorkspaces(workspaceStoragePath: string): IWorkspaceInfo[] {
 
     const workspaceInfo = JSON.parse(readFileSync(workspaceInfoPath, 'utf8'));
 
-    if (!workspaceInfo.folder) {
-      workspaces.push({
-        name: dir,
-        note: `No workspace uri in ${workspaceInfoPath}`
-      });
+    if (workspaceInfo.workspace) {
+      const workspaceFileUri = Uri.parse(workspaceInfo.workspace);
 
-      continue;
-    }
-
-    const workspacePathUri = Uri.parse(workspaceInfo.folder);
-
-    if (!workspacePathUri) {
-      workspaces.push({
-        name: dir,
-        note: `Invalid workspace URI (${workspaceInfo.folder}) in ${workspaceInfoPath}`
-      });
-
-      continue;
-    }
-
-    if (workspacePathUri.scheme === 'file') {
-      const workspacePath = workspacePathUri.fsPath;
-
-      if (workspacePath) {
+      if (!workspaceFileUri) {
         workspaces.push({
           name: dir,
-          path: workspacePath,
-          pathExists: existsSync(workspacePath)
+          note: `Invalid workspace file URI (${workspaceInfo.workspace}) in ${workspaceInfoPath}`
         });
-      } else {
-        const workspaceUrl = workspacePathUri.toString();
 
-        workspaces.push({
-          name: dir,
-          url: workspaceUrl
-        });
+        continue;
       }
+
+      if (workspaceFileUri.scheme === 'file') {
+        const workspaceFile = workspaceFileUri.fsPath;
+
+        if (workspaceFile) {
+          workspaces.push({
+            name: dir,
+            path: workspaceFile,
+            pathExists: existsSync(workspaceFile)
+          });
+
+          continue;
+        }
+      }
+
+      const workspaceUrl = workspaceFileUri.toString();
+
+      workspaces.push({
+        name: dir,
+        url: workspaceUrl
+      });
+
+      continue;
     }
-    else {
+
+    if (workspaceInfo.folder) {
+      const workspacePathUri = Uri.parse(workspaceInfo.folder);
+
+      if (!workspacePathUri) {
+        workspaces.push({
+          name: dir,
+          note: `Invalid workspace folder URI (${workspaceInfo.folder}) in ${workspaceInfoPath}`
+        });
+
+        continue;
+      }
+
+      if (workspacePathUri.scheme === 'file') {
+        const workspacePath = workspacePathUri.fsPath;
+
+        if (workspacePath) {
+          workspaces.push({
+            name: dir,
+            path: workspacePath,
+            pathExists: existsSync(workspacePath)
+          });
+
+          continue;
+        }
+      }
+
       const workspaceUrl = workspacePathUri.toString();
 
       workspaces.push({
         name: dir,
         url: workspaceUrl
       });
+
+      continue;
     }
+
+    workspaces.push({
+      name: dir,
+      note: `No workspace folder or file URI in ${workspaceInfoPath}`
+    });
   }
 
   workspaces.sort(sortWorkspaceInfoArray);
