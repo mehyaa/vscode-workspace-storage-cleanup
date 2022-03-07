@@ -33,11 +33,14 @@ jobs:
         run: echo "PACKAGE_VERSION=$(npm run env | grep "npm_package_version" | awk -F "=" '{print $2}')" >> $GITHUB_ENV
 
       - name: Pack Extension
+        id: pack_extension
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           dryRun: true
-          pat: "."
-          extensionFile: "./${{ env.PACKAGE_NAME }}-${{ env.PACKAGE_VERSION }}.vsix"
+          pat: "stub"
+
+      - name: Set Extension Filename to Environment Variable
+        run: echo "EXTENSION_FILENAME=$(basename '${{ steps.pack_extension.outputs.vsixPath }}')" >> $GITHUB_ENV
 
       - name: Publish Extension to Visual Studio Code Marketplace
         if: github.event_name != 'pull_request'
@@ -45,7 +48,7 @@ jobs:
         with:
           pat: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
           registryUrl: https://marketplace.visualstudio.com
-          extensionFile: "./${{ env.PACKAGE_NAME }}-${{ env.PACKAGE_VERSION }}.vsix"
+          extensionFile: "${{ steps.pack_extension.outputs.vsixPath }}"
 
       - name: Create Draft Release
         if: github.event_name != 'pull_request'
@@ -66,8 +69,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: "./${{ env.PACKAGE_NAME }}-${{ env.PACKAGE_VERSION }}.vsix"
-          asset_name: "${{ env.PACKAGE_NAME }}-${{ env.PACKAGE_VERSION }}.vsix"
+          asset_path: "${{ steps.pack_extension.outputs.vsixPath }}"
+          asset_name: "${{ env.EXTENSION_FILENAME }}"
           asset_content_type: application/zip
 
       - name: Publish Draft Release
