@@ -36,6 +36,7 @@ jobs:
         uses: HaaLeo/publish-vscode-extension@v1
         with:
           dryRun: true
+          pat: "."
           extensionFile: "./${{ env.PACKAGE_NAME }}-${{ env.PACKAGE_VERSION }}.vsix"
 
       - name: Publish Extension to Visual Studio Code Marketplace
