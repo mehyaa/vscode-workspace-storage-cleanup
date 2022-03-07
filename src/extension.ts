@@ -237,7 +237,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
 
       rows.push(`
         <tr>
-          <td><input class="check" type="checkbox" value="${workspace.name}"></td>
+          <td><input class='check ${icon ? 'path-does-not-exist' : ''}' type="checkbox" value="${workspace.name}"></td>
           <td>${workspace.name}</td>
           <td>${workspace.path}${icon}</td>
           <td>
@@ -248,7 +248,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
     else if (workspace.url) {
       rows.push(`
         <tr>
-          <td><input class="check" type="checkbox" value="${workspace.name}"></td>
+          <td><input class="check remote-extensions" type="checkbox" value="${workspace.name}"></td>
           <td>${workspace.name}</td>
           <td>${workspace.url}</td>
           <td>
@@ -259,7 +259,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
     else {
       rows.push(`
         <tr>
-          <td><input class="check" type="checkbox" value="${workspace.name}"></td>
+          <td><input class="check noted-extensions" type="checkbox" value="${workspace.name}"></td>
           <td>${workspace.name}</td>
           <td>${workspace.note}</td>
           <td>
@@ -277,6 +277,12 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
     <title>Workspace Storage</title>
 </head>
 <body>
+    <br />
+    <button onclick="onSelectNonExistent()">Toggle folder missing</button>
+    <button onclick="onSelectRemotes()">Toggle remote Workspaces</button>
+    <button onclick="onSelectMissingWorkspaceInfoPath()">Toggle broken Workspaces</button>
+    <br />
+    <br />
     <table border="1" cellspacing="0" cellpadding="5" width="100%">
       <thead>
         <tr>
@@ -321,7 +327,19 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
           selectedWorkspaces: selectedWorkspaces
         });
       }
-    </script>
+
+      function onSelectNonExistent() {
+        document.querySelectorAll('input.check[type="checkbox"].path-does-not-exist').forEach(e => e.checked = !e.checked);
+      }
+
+      function onSelectRemotes() {
+      document.querySelectorAll('input.check[type="checkbox"].remote-extensions').forEach(e => e.checked = !e.checked);
+      }
+
+      function onSelectMissingWorkspaceInfoPath() {
+      document.querySelectorAll('input.check[type="checkbox"].noted-extensions').forEach(e => e.checked = !e.checked);
+      }
+      </script>
 </body>
 </html>`;
 }
