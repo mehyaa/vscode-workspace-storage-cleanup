@@ -51,7 +51,7 @@ jobs:
           extensionFile: "${{ steps.pack_extension.outputs.vsixPath }}"
 
       - name: Create Draft Release
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push'
         id: create_release
         uses: actions/create-release@v1
         env:
@@ -63,7 +63,7 @@ jobs:
           prerelease: false
 
       - name: Upload Extension File to Draft Release
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push'
         uses: actions/upload-release-asset@v1.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,7 +74,7 @@ jobs:
           asset_content_type: application/zip
 
       - name: Publish Draft Release
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push'
         uses: eregon/publish-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
