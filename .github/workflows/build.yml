@@ -27,10 +27,10 @@ jobs:
         run: npm ci
 
       - name: Set Package Name to Environment Variable
-        run: echo "PACKAGE_NAME=${npm run env | grep "npm_package_name" | awk -F "=" '{print $2}'}" >> $GITHUB_ENV
+        run: echo "PACKAGE_NAME=$(npm run env | grep "npm_package_name" | awk -F "=" '{print $2}')" >> $GITHUB_ENV
 
       - name: Set Package Version to Environment Variable
-        run: echo "PACKAGE_VERSION=${npm run env | grep "npm_package_version" | awk -F "=" '{print $2}'}" >> $GITHUB_ENV
+        run: echo "PACKAGE_VERSION=$(npm run env | grep "npm_package_version" | awk -F "=" '{print $2}')" >> $GITHUB_ENV
 
       - name: Pack Extension
         uses: HaaLeo/publish-vscode-extension@v1
@@ -58,8 +58,9 @@ jobs:
           draft: true
           prerelease: false
 
-      - uses: actions/upload-release-asset@v1.0.1
+      - name: Upload Extension File to Draft Release
         if: github.event_name != 'pull_request'
+        uses: actions/upload-release-asset@v1.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -68,8 +69,9 @@ jobs:
           asset_name: "${{ env.PACKAGE_NAME }}-${{ env.PACKAGE_VERSION }}.vsix"
           asset_content_type: application/zip
 
-      - uses: eregon/publish-release@v1
+      - name: Publish Draft Release
         if: github.event_name != 'pull_request'
+        uses: eregon/publish-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
