@@ -328,7 +328,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
       }
 
       function onToggleAll() {
-        const allElements = document.querySelectorAll('input[type="checkbox"].check:checked');
+        const allElements = document.querySelectorAll('input[type="checkbox"].check');
         const selectedElements = document.querySelectorAll('input[type="checkbox"].check:checked');
 
         allElements.length === selectedElements.length
