@@ -237,7 +237,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
 
       rows.push(`
         <tr>
-          <td><input class='check ${icon ? 'path-does-not-exist' : ''}' type="checkbox" value="${workspace.name}"></td>
+          <td><input class="check ${icon ? 'folder-missing' : ''}" type="checkbox" value="${workspace.name}"></td>
           <td>${workspace.name}</td>
           <td>${workspace.path}${icon}</td>
           <td>
@@ -248,7 +248,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
     else if (workspace.url) {
       rows.push(`
         <tr>
-          <td><input class="check remote-extensions" type="checkbox" value="${workspace.name}"></td>
+          <td><input class="check remote" type="checkbox" value="${workspace.name}"></td>
           <td>${workspace.name}</td>
           <td>${workspace.url}</td>
           <td>
@@ -259,7 +259,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
     else {
       rows.push(`
         <tr>
-          <td><input class="check noted-extensions" type="checkbox" value="${workspace.name}"></td>
+          <td><input class="check broken" type="checkbox" value="${workspace.name}"></td>
           <td>${workspace.name}</td>
           <td>${workspace.note}</td>
           <td>
@@ -278,9 +278,11 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
 </head>
 <body>
     <br />
-    <button onclick="onSelectNonExistent()">Toggle folder missing</button>
-    <button onclick="onSelectRemotes()">Toggle remote Workspaces</button>
-    <button onclick="onSelectMissingWorkspaceInfoPath()">Toggle broken Workspaces</button>
+    <button onclick="onToggleAll()">Toggle all</button>
+    <button onclick="onToggleFolderMissing()">Toggle folder missing</button>
+    <button onclick="onToggleRemote()">Toggle remote</button>
+    <button onclick="onToggleBroken()">Toggle broken</button>
+    <button onclick="onInvertSelection()">Invert selection</button>
     <br />
     <br />
     <table border="1" cellspacing="0" cellpadding="5" width="100%">
@@ -316,11 +318,8 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
       }
 
       function onDeleteSelected() {
-        const selectedWorkspaces =
-          Array.prototype.map.call(
-            document.querySelectorAll(
-              'input.check[type="checkbox"]:checked'),
-            e => e.value);
+        const selectedElements = document.querySelectorAll('input[type="checkbox"].check:checked');
+        const selectedWorkspaces = Array.prototype.map.call(selectedElements, e => e.value);
 
         vscode.postMessage({
           command: 'delete',
@@ -328,18 +327,43 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
         });
       }
 
-      function onSelectNonExistent() {
-        document.querySelectorAll('input.check[type="checkbox"].path-does-not-exist').forEach(e => e.checked = !e.checked);
+      function onToggleAll() {
+        const allElements = document.querySelectorAll('input[type="checkbox"].check:checked');
+        const selectedElements = document.querySelectorAll('input[type="checkbox"].check:checked');
+
+        allElements.length === selectedElements.length
+          ? document
+            .querySelectorAll('input[type="checkbox"].check')
+            .forEach(e => e.checked = false)
+          : document
+            .querySelectorAll('input[type="checkbox"].check')
+            .forEach(e => e.checked = true);
       }
 
-      function onSelectRemotes() {
-      document.querySelectorAll('input.check[type="checkbox"].remote-extensions').forEach(e => e.checked = !e.checked);
+      function onToggleFolderMissing() {
+        document
+          .querySelectorAll('input[type="checkbox"].check.folder-missing')
+          .forEach(e => e.checked = !e.checked);
       }
 
-      function onSelectMissingWorkspaceInfoPath() {
-      document.querySelectorAll('input.check[type="checkbox"].noted-extensions').forEach(e => e.checked = !e.checked);
+      function onToggleRemote() {
+        document
+          .querySelectorAll('input[type="checkbox"].check.remote')
+          .forEach(e => e.checked = !e.checked);
       }
-      </script>
+
+      function onToggleBroken() {
+        document
+          .querySelectorAll('input[type="checkbox"].check.broken')
+          .forEach(e => e.checked = !e.checked);
+      }
+
+      function onInvertSelection() {
+        document
+          .querySelectorAll('input[type="checkbox"].check')
+          .forEach(e => e.checked = !e.checked);
+      }
+    </script>
 </body>
 </html>`;
 }
