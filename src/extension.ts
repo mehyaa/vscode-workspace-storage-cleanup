@@ -15,7 +15,8 @@ import {
   window,
   ExtensionContext,
   Uri,
-  ViewColumn
+  ViewColumn,
+  WebviewPanel
 } from 'vscode';
 
 interface IWorkspaceInfo {
@@ -27,6 +28,8 @@ interface IWorkspaceInfo {
 }
 
 export function activate(context: ExtensionContext) {
+  let currentPanel: WebviewPanel | undefined = undefined;
+
   context.subscriptions.push(
     commands.registerCommand(
       'workspace-storage-cleanup.run',
@@ -43,54 +46,67 @@ export function activate(context: ExtensionContext) {
 
         const workspaceStoragePath = joinPath(userPath, 'workspaceStorage');
 
-        const workspaces = getWorkspaces(workspaceStoragePath);
-
-        const panel =
-          window.createWebviewPanel(
-            'workspace-storage-cleanup.run',
-            'Workspace Storage',
-            ViewColumn.One,
-            {
-              enableScripts: true
-            }
-          );
-
-        panel.webview.html = getWebviewContent(workspaces);
-
         function updateWebview() {
-          panel.webview.html = getWebviewContent(getWorkspaces(workspaceStoragePath));
+          if (currentPanel) {
+            currentPanel.webview.html = getWebviewContent(getWorkspaces(workspaceStoragePath));
+          }
         }
 
-        // Handle messages from the webview
-        panel.webview.onDidReceiveMessage(
-          message => {
-            if (message.command === 'delete' && message.selectedWorkspaces?.length > 0) {
-              const errorMessages: string[] = [];
+        if (currentPanel) {
+          currentPanel.reveal(ViewColumn.One);
+        } else {
+          currentPanel =
+            window.createWebviewPanel(
+              'workspace-storage-cleanup.run',
+              'Workspace Storage',
+              ViewColumn.One,
+              {
+                enableScripts: true
+              }
+            );
 
-              for (const workspace of message.selectedWorkspaces) {
-                const dirPath = joinPath(workspaceStoragePath, workspace);
+            currentPanel.webview.onDidReceiveMessage(
+              message => {
+                switch (message.command) {
+                  case 'refresh':
+                    updateWebview();
 
-                try {
-                  rmdirSync(dirPath, { recursive: true });
-                } catch (err) {
-                  const error = err as Error;
+                    break;
 
-                  if (error) {
-                    errorMessages.push(error.message);
-                  }
+                  case 'delete':
+                    if (message.selectedWorkspaces?.length > 0) {
+                      const errorMessages: string[] = [];
+
+                      for (const workspace of message.selectedWorkspaces) {
+                        const dirPath = joinPath(workspaceStoragePath, workspace);
+
+                        try {
+                          rmdirSync(dirPath, { recursive: true });
+                        } catch (err) {
+                          const error = err as Error;
+
+                          if (error) {
+                            errorMessages.push(error.message);
+                          }
+                        }
+                      }
+
+                      if (errorMessages.length > 0) {
+                        window.showErrorMessage(errorMessages.join('\n'));
+                      }
+
+                      updateWebview();
+                    }
+
+                    break;
                 }
-              }
+              },
+              void 0,
+              context.subscriptions
+            );
+        }
 
-              if (errorMessages.length > 0) {
-                window.showErrorMessage(errorMessages.join('\n'));
-              }
-
-              updateWebview();
-            }
-          },
-          void 0,
-          context.subscriptions
-        );
+        updateWebview();
       }
     )
   )
@@ -283,6 +299,7 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
     <button onclick="onToggleRemote()">Toggle remote</button>
     <button onclick="onToggleBroken()">Toggle broken</button>
     <button onclick="onInvertSelection()">Invert selection</button>
+    <button onclick="onRefresh()">Refresh List</button>
     <br />
     <br />
     <table border="1" cellspacing="0" cellpadding="5" width="100%">
@@ -296,16 +313,18 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
       </thead>
       <tbody>
         ${rows.join('\n')}
+      </tbody>
+      <tfoot>
         <tr>
           <td></td>
-          <td colspan="3">${workspaces.length} item(s) listed.</td>
+          <td colspan="3">${workspaces.length} item${workspaces.length > 1 ? '(s)' : ''} listed.</td>
         </tr>
-      </tbody>
+      </tfoot>
     </table>
 
     <br />
 
-    <button onclick="onDeleteSelected()">Delete</button>
+    <button onclick="onDeleteSelected()">Delete Selected</button>
 
     <script>
       var vscode = acquireVsCodeApi();
@@ -327,41 +346,45 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
         });
       }
 
-      function onToggleAll() {
-        const allElements = document.querySelectorAll('input[type="checkbox"].check');
-        const selectedElements = document.querySelectorAll('input[type="checkbox"].check:checked');
+      function onToggleCheckboxes(selector) {
+        const allElements = document.querySelectorAll(selector);
+        const selectedElements = document.querySelectorAll(selector + ':checked');
 
         allElements.length === selectedElements.length
           ? document
-            .querySelectorAll('input[type="checkbox"].check')
-            .forEach(e => e.checked = false)
+              .querySelectorAll(selector)
+              .forEach(e => e.checked = false)
           : document
-            .querySelectorAll('input[type="checkbox"].check')
-            .forEach(e => e.checked = true);
+              .querySelectorAll(selector)
+              .forEach(e => e.checked = true);
+      }
+
+      function onToggleAll() {
+        onToggleCheckboxes('input[type="checkbox"].check');
       }
 
       function onToggleFolderMissing() {
-        document
-          .querySelectorAll('input[type="checkbox"].check.folder-missing')
-          .forEach(e => e.checked = !e.checked);
+        onToggleCheckboxes('input[type="checkbox"].check.folder-missing');
       }
 
       function onToggleRemote() {
-        document
-          .querySelectorAll('input[type="checkbox"].check.remote')
-          .forEach(e => e.checked = !e.checked);
+        onToggleCheckboxes('input[type="checkbox"].check.remote');
       }
 
       function onToggleBroken() {
-        document
-          .querySelectorAll('input[type="checkbox"].check.broken')
-          .forEach(e => e.checked = !e.checked);
+        onToggleCheckboxes('input[type="checkbox"].check.broken');
       }
 
       function onInvertSelection() {
         document
           .querySelectorAll('input[type="checkbox"].check')
           .forEach(e => e.checked = !e.checked);
+      }
+
+      function onRefresh() {
+        vscode.postMessage({
+          command: 'refresh'
+        });
       }
     </script>
 </body>
