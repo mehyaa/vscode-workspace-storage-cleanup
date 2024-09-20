@@ -1,131 +1,142 @@
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  rmdirSync
-} from 'fs';
+import { Dirent, existsSync } from 'fs';
 
-import {
-  dirname,
-  join as joinPath,
-} from 'path';
+import { readdir, readFile, rmdir, stat } from 'fs/promises';
 
-import {
-  commands,
-  window,
-  ExtensionContext,
-  Uri,
-  ViewColumn,
-  WebviewPanel
-} from 'vscode';
+import { dirname, join as pathJoin } from 'path';
 
-interface IWorkspaceInfo {
+import { commands, window, ExtensionContext, Uri, ViewColumn, WebviewPanel } from 'vscode';
+
+type WorkspaceInfo = {
   name: string;
   path?: string;
   pathExists?: boolean;
   url?: string;
   note?: string;
-}
+  workspaceSize?: number;
+  storageSize?: number;
+};
+
+type WebviewMessage = {
+  command: string;
+  selectedWorkspaces?: Array<string>;
+};
+
+let currentPanel: WebviewPanel | undefined = undefined;
+let currentPanelDisposed: boolean = false;
 
 export function activate(context: ExtensionContext) {
-  let currentPanel: WebviewPanel | undefined = undefined;
-
   context.subscriptions.push(
-    commands.registerCommand(
-      'workspace-storage-cleanup.run',
-      () => {
-        const globalStoragePath = dirname(context.globalStorageUri.fsPath);
-
-        if (!globalStoragePath || !existsSync(globalStoragePath)) {
-          window.showErrorMessage('Could not find global storage path.');
-
-          return;
-        }
-
-        const userPath = dirname(globalStoragePath);
-
-        const workspaceStoragePath = joinPath(userPath, 'workspaceStorage');
-
-        function updateWebview() {
-          if (currentPanel) {
-            currentPanel.webview.html = getWebviewContent(getWorkspaces(workspaceStoragePath));
-          }
-        }
-
-        if (currentPanel) {
-          currentPanel.reveal(ViewColumn.One);
-        } else {
-          currentPanel =
-            window.createWebviewPanel(
-              'workspace-storage-cleanup.run',
-              'Workspace Storage',
-              ViewColumn.One,
-              {
-                enableScripts: true
-              }
-            );
-
-            currentPanel.webview.onDidReceiveMessage(
-              message => {
-                switch (message.command) {
-                  case 'refresh':
-                    updateWebview();
-
-                    break;
-
-                  case 'delete':
-                    if (message.selectedWorkspaces?.length > 0) {
-                      const errorMessages: string[] = [];
-
-                      for (const workspace of message.selectedWorkspaces) {
-                        const dirPath = joinPath(workspaceStoragePath, workspace);
-
-                        try {
-                          rmdirSync(dirPath, { recursive: true });
-                        } catch (err) {
-                          const error = err as Error;
-
-                          if (error) {
-                            errorMessages.push(error.message);
-                          }
-                        }
-                      }
-
-                      if (errorMessages.length > 0) {
-                        window.showErrorMessage(errorMessages.join('\n'));
-                      }
-
-                      updateWebview();
-                    }
-
-                    break;
-                }
-              },
-              void 0,
-              context.subscriptions
-            );
-        }
-
-        updateWebview();
-      }
-    )
-  )
+    commands.registerCommand('workspace-storage-cleanup.run', () => showWorkspacePanelAsync(context))
+  );
 }
 
-export function deactivate() { } // eslint-disable-line @typescript-eslint/no-empty-function
+export function deactivate() {} // eslint-disable-line @typescript-eslint/no-empty-function
 
-function getWorkspaces(workspaceStoragePath: string): IWorkspaceInfo[] {
-  const directories =
-    readdirSync(workspaceStoragePath, { withFileTypes: true })
-      .filter(dir => dir.isDirectory())
-      .map(dir => dir.name);
+async function showWorkspacePanelAsync(context: ExtensionContext): Promise<void> {
+  const globalStoragePath = dirname(context.globalStorageUri.fsPath);
 
-  const workspaces: IWorkspaceInfo[] = [];
+  if (!globalStoragePath) {
+    window.showErrorMessage('Could not get global storage path.');
+
+    return;
+  }
+
+  const showSizesString = await window.showQuickPick(['Yes', 'No'], {
+    placeHolder: 'Show folder sizes?'
+  });
+
+  const showSizes = showSizesString === 'Yes';
+
+  const vscodeProfilePath = dirname(globalStoragePath);
+
+  const workspaceStoragePath = pathJoin(vscodeProfilePath, 'workspaceStorage');
+
+  async function handleWebviewMessage(message: WebviewMessage): Promise<void> {
+    switch (message.command) {
+      case 'refresh':
+        {
+          const workspaces = await getWorkspacesAsync(workspaceStoragePath, showSizes);
+
+          await updateWebviewAsync(workspaces, showSizes);
+        }
+
+        break;
+
+      case 'delete':
+        if (message.selectedWorkspaces && message.selectedWorkspaces.length > 0) {
+          const errorMessages: Array<string> = [];
+
+          for (const workspace of message.selectedWorkspaces) {
+            const dirPath = pathJoin(workspaceStoragePath, workspace);
+
+            try {
+              await rmdir(dirPath, { recursive: true });
+            } catch (err) {
+              const error = err as Error;
+
+              if (error) {
+                errorMessages.push(error.message);
+              }
+            }
+          }
+
+          if (errorMessages.length > 0) {
+            window.showErrorMessage(errorMessages.join('\n'));
+          }
+
+          const workspaces = await getWorkspacesAsync(workspaceStoragePath, showSizes);
+
+          await updateWebviewAsync(workspaces, showSizes);
+        }
+
+        break;
+    }
+  }
+
+  if (currentPanel && !currentPanelDisposed) {
+    currentPanel.reveal(ViewColumn.One, false);
+  } else {
+    currentPanel = window.createWebviewPanel(
+      'workspace-storage-cleanup.run',
+      'Workspace Storage',
+      {
+        viewColumn: ViewColumn.One,
+        preserveFocus: false
+      },
+      {
+        enableScripts: true
+      }
+    );
+
+    context.subscriptions.push(currentPanel);
+
+    currentPanel.onDidDispose(() => (currentPanelDisposed = true));
+
+    currentPanel.webview.onDidReceiveMessage(handleWebviewMessage);
+  }
+
+  const workspaces = await getWorkspacesAsync(workspaceStoragePath, showSizes);
+
+  await updateWebviewAsync(workspaces, showSizes);
+}
+
+async function updateWebviewAsync(workspaces: Array<WorkspaceInfo>, showSizes: boolean): Promise<void> {
+  if (currentPanel && !currentPanelDisposed) {
+    currentPanel.webview.html = getWebviewContent(workspaces, showSizes);
+  }
+}
+
+async function getWorkspacesAsync(workspaceStoragePath: string, includeSizes: boolean): Promise<Array<WorkspaceInfo>> {
+  const directories = (await readdir(workspaceStoragePath, { withFileTypes: true }))
+    .filter(dir => dir.isDirectory())
+    .map(dir => dir.name);
+
+  const workspaces: Array<WorkspaceInfo> = [];
 
   for (const dir of directories) {
-    const dirPath = joinPath(workspaceStoragePath, dir);
+    const dirPath = pathJoin(workspaceStoragePath, dir);
 
-    const workspaceInfoPath = joinPath(dirPath, 'workspace.json');
+    const workspaceInfoPath = pathJoin(dirPath, 'workspace.json');
 
     if (!existsSync(workspaceInfoPath)) {
       workspaces.push({
@@ -136,7 +147,9 @@ function getWorkspaces(workspaceStoragePath: string): IWorkspaceInfo[] {
       continue;
     }
 
-    const workspaceInfo = JSON.parse(readFileSync(workspaceInfoPath, 'utf8'));
+    const fileContent = await readFile(workspaceInfoPath, 'utf8');
+
+    const workspaceInfo = JSON.parse(fileContent);
 
     if (workspaceInfo.workspace) {
       const workspaceFileUri = Uri.parse(workspaceInfo.workspace);
@@ -190,11 +203,21 @@ function getWorkspaces(workspaceStoragePath: string): IWorkspaceInfo[] {
         const workspacePath = workspacePathUri.fsPath;
 
         if (workspacePath) {
-          workspaces.push({
+          const workspace: WorkspaceInfo = {
             name: dir,
             path: workspacePath,
             pathExists: existsSync(workspacePath)
-          });
+          };
+
+          if (includeSizes) {
+            if (workspace.pathExists) {
+              workspace.workspaceSize = await getDirSizeAsync(workspacePath);
+            }
+
+            workspace.storageSize = await getDirSizeAsync(dirPath);
+          }
+
+          workspaces.push(workspace);
 
           continue;
         }
@@ -221,7 +244,7 @@ function getWorkspaces(workspaceStoragePath: string): IWorkspaceInfo[] {
   return workspaces;
 }
 
-function sortWorkspaceInfoArray(first: IWorkspaceInfo, second: IWorkspaceInfo): number {
+function sortWorkspaceInfoArray(first: WorkspaceInfo, second: WorkspaceInfo): number {
   const firstValue = first.path ?? first.url ?? first.note ?? '';
   const secondValue = second.path ?? second.url ?? second.note ?? '';
 
@@ -244,44 +267,160 @@ function sortWorkspaceInfoArray(first: IWorkspaceInfo, second: IWorkspaceInfo): 
   return 0;
 }
 
-function getWebviewContent(workspaces: IWorkspaceInfo[]) {
-  const rows: string[] = [];
+async function getDirSizeAsync(dirPath: string): Promise<number> {
+  let totalSize = 0;
+
+  const stack: Array<string> = [dirPath];
+
+  while (stack.length > 0) {
+    const currentPath = stack.pop()!;
+
+    let entries: Array<Dirent>;
+
+    try {
+      entries = await readdir(currentPath, { withFileTypes: true });
+    } catch (err) {
+      window.showErrorMessage(`Error occured when reading '${currentPath}' (${err})`);
+
+      return 0;
+    }
+
+    const statPromises = entries.map(async entry => {
+      const entryPath = pathJoin(currentPath, entry.name);
+
+      if (entry.isFile()) {
+        try {
+          const stats = await stat(entryPath);
+
+          totalSize += stats.size;
+        } catch (err) {
+          window.showErrorMessage(`Error occured when getting file size of '${entryPath}' (${err})`);
+
+          return 0;
+        }
+      } else if (entry.isDirectory()) {
+        stack.push(entryPath);
+      }
+    });
+
+    await Promise.all(statPromises);
+  }
+
+  return totalSize;
+}
+
+function humanFileSize(size: number | undefined): string {
+  size = size ?? 0;
+
+  const i = size === 0 ? 0 : Math.floor(Math.log(size) / Math.log(1024));
+
+  return `${(size / Math.pow(1024, i)).toFixed(2)} ${['B', 'kB', 'MB', 'GB', 'TB'][i]}`;
+}
+
+function getWebviewContent(workspaces: Array<WorkspaceInfo>, includeSizes: boolean) {
+  const cols: Array<string> = [];
+  const headers: Array<string> = [];
+  const rows: Array<string> = [];
+
+  cols.push('<col>');
+  cols.push('<col>');
+
+  headers.push('<th></th>');
+  headers.push('<th>Name</th>');
+
+  if (includeSizes) {
+    cols.push('<col align="right">');
+
+    headers.push('<th>Storage Size</th>');
+  }
+
+  headers.push('<th>Path / URL</th>');
+
+  if (includeSizes) {
+    cols.push('<col align="right">');
+
+    headers.push('<th>Workspace Size</th>');
+  }
+
+  cols.push('<col>');
+
+  headers.push('<th></th>');
 
   for (const workspace of workspaces) {
     if (workspace.path) {
       const icon = !workspace.pathExists ? ' ❌' : '';
 
-      rows.push(`
-        <tr>
-          <td><input class="check ${icon ? 'folder-missing' : ''}" type="checkbox" value="${workspace.name}"></td>
-          <td>${workspace.name}</td>
-          <td>${workspace.path}${icon}</td>
-          <td>
-            <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
-          </td>
-        </tr>`);
-    }
-    else if (workspace.url) {
-      rows.push(`
-        <tr>
-          <td><input class="check remote" type="checkbox" value="${workspace.name}"></td>
-          <td>${workspace.name}</td>
-          <td>${workspace.url}</td>
-          <td>
-            <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
-          </td>
-        </tr>`);
-    }
-    else {
-      rows.push(`
-        <tr>
-          <td><input class="check broken" type="checkbox" value="${workspace.name}"></td>
-          <td>${workspace.name}</td>
-          <td>${workspace.note}</td>
-          <td>
-            <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
-          </td>
-        </tr>`);
+      if (includeSizes) {
+        rows.push(`
+          <tr>
+            <td><input class="check ${icon ? 'folder-missing' : ''}" type="checkbox" value="${workspace.name}"></td>
+            <td>${workspace.name}</td>
+            <td>${humanFileSize(workspace.storageSize)}</td>
+            <td>${workspace.path}${icon}</td>
+            <td>${workspace.workspaceSize ? humanFileSize(workspace.workspaceSize) : '-'}</td>
+            <td>
+              <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
+            </td>
+          </tr>`);
+      } else {
+        rows.push(`
+          <tr>
+            <td><input class="check ${icon ? 'folder-missing' : ''}" type="checkbox" value="${workspace.name}"></td>
+            <td>${workspace.name}</td>
+            <td>${workspace.path}${icon}</td>
+            <td>
+              <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
+            </td>
+          </tr>`);
+      }
+    } else if (workspace.url) {
+      if (includeSizes) {
+        rows.push(`
+          <tr>
+            <td><input class="check remote" type="checkbox" value="${workspace.name}"></td>
+            <td>${workspace.name}</td>
+            <td>${humanFileSize(workspace.storageSize)}</td>
+            <td>${workspace.url}</td>
+            <td>${workspace.workspaceSize ? humanFileSize(workspace.workspaceSize) : '-'}</td>
+            <td>
+              <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
+            </td>
+          </tr>`);
+      } else {
+        rows.push(`
+          <tr>
+            <td><input class="check remote" type="checkbox" value="${workspace.name}"></td>
+            <td>${workspace.name}</td>
+            <td>${workspace.url}</td>
+            <td>
+              <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
+            </td>
+          </tr>`);
+      }
+    } else {
+      if (includeSizes) {
+        rows.push(`
+          <tr>
+            <td><input class="check broken" type="checkbox" value="${workspace.name}"></td>
+            <td>${workspace.name}</td>
+            <td>${humanFileSize(workspace.storageSize)}</td>
+            <td>${workspace.note}</td>
+            <td>${workspace.workspaceSize ? humanFileSize(workspace.workspaceSize) : '-'}</td>
+            <td>
+              <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
+            </td>
+          </tr>`);
+      } else {
+        rows.push(`
+          <tr>
+            <td><input class="check broken" type="checkbox" value="${workspace.name}"></td>
+            <td>${workspace.name}</td>
+            <td>${workspace.note}</td>
+            <td>
+              <a href="javascript:;" onclick="onDelete('${workspace.name}')">Delete</a>
+            </td>
+          </tr>`);
+      }
     }
   }
 
@@ -303,12 +442,12 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
     <br />
     <br />
     <table border="1" cellspacing="0" cellpadding="5" width="100%">
+      <colgroup>
+        ${cols.join('\n')}
+      </colgroup>
       <thead>
         <tr>
-          <th></th>
-          <th>Name</th>
-          <th>Path / URL</th>
-          <th></th>
+          ${headers.join('\n')}
         </tr>
       </thead>
       <tbody>
@@ -317,7 +456,9 @@ function getWebviewContent(workspaces: IWorkspaceInfo[]) {
       <tfoot>
         <tr>
           <td></td>
-          <td colspan="3">${workspaces.length} item${workspaces.length > 1 ? '(s)' : ''} listed.</td>
+          <td colspan="${includeSizes ? '5' : '3'}">${workspaces.length} item${
+    workspaces.length > 1 ? '(s)' : ''
+  } listed.</td>
         </tr>
       </tfoot>
     </table>
