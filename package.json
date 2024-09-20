@@ -1,7 +1,7 @@
 {
   "name": "workspace-storage-cleanup",
   "displayName": "Workspace Storage Cleanup",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Remove workspace storage folders which are linked to non-existent folders",
   "icon": "img/icon.png",
   "publisher": "mehyaa",
@@ -47,17 +47,15 @@
     "compile": "npm run clean && tsc",
     "watch": "npm run clean && tsc --watch",
     "vscode:prepublish": "npm run compile",
-    "lint": "eslint --ext ts src",
-    "postinstall": "vscode-install"
+    "lint": "eslint --ext ts src"
   },
   "devDependencies": {
-    "@types/node": "14.x",
-    "@types/vscode": "^1.0.0",
+    "@types/node": "16.*",
+    "@types/vscode": "1.75.0",
     "@typescript-eslint/eslint-plugin": "^8.6.0",
     "@typescript-eslint/parser": "^8.6.0",
     "eslint": "^9.10.0",
     "rimraf": "^6.0.1",
-    "typescript": "^5.6.2",
-    "vscode": "^1.1.37"
+    "typescript": "^5.6.2"
   }
 }
