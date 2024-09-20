@@ -55,6 +55,8 @@ async function showWorkspacePanelAsync(context: ExtensionContext): Promise<void>
     switch (message.command) {
       case 'refresh':
         {
+          showLoadingOnWebview();
+
           const workspaces = await getWorkspacesAsync(workspaceStoragePath, showSizes);
 
           await updateWebviewAsync(workspaces, showSizes);
@@ -83,6 +85,8 @@ async function showWorkspacePanelAsync(context: ExtensionContext): Promise<void>
           if (errorMessages.length > 0) {
             window.showErrorMessage(errorMessages.join('\n'));
           }
+
+          showLoadingOnWebview();
 
           const workspaces = await getWorkspacesAsync(workspaceStoragePath, showSizes);
 
@@ -115,6 +119,8 @@ async function showWorkspacePanelAsync(context: ExtensionContext): Promise<void>
     currentPanel.webview.onDidReceiveMessage(handleWebviewMessage);
   }
 
+  showLoadingOnWebview();
+
   const workspaces = await getWorkspacesAsync(workspaceStoragePath, showSizes);
 
   await updateWebviewAsync(workspaces, showSizes);
@@ -122,7 +128,13 @@ async function showWorkspacePanelAsync(context: ExtensionContext): Promise<void>
 
 async function updateWebviewAsync(workspaces: Array<WorkspaceInfo>, showSizes: boolean): Promise<void> {
   if (currentPanel && !currentPanelDisposed) {
-    currentPanel.webview.html = getWebviewContent(workspaces, showSizes);
+    currentPanel.webview.html = getWorkspaceInfoWebviewContent(workspaces, showSizes);
+  }
+}
+
+function showLoadingOnWebview(): void {
+  if (currentPanel && !currentPanelDisposed) {
+    currentPanel.webview.html = getLoadingWebviewContent();
   }
 }
 
@@ -317,7 +329,7 @@ function humanFileSize(size: number | undefined): string {
   return `${(size / Math.pow(1024, i)).toFixed(2)} ${['B', 'kB', 'MB', 'GB', 'TB'][i]}`;
 }
 
-function getWebviewContent(workspaces: Array<WorkspaceInfo>, includeSizes: boolean) {
+function getWorkspaceInfoWebviewContent(workspaces: Array<WorkspaceInfo>, includeSizes: boolean) {
   const cols: Array<string> = [];
   const headers: Array<string> = [];
   const rows: Array<string> = [];
@@ -530,4 +542,129 @@ function getWebviewContent(workspaces: Array<WorkspaceInfo>, includeSizes: boole
     </script>
 </body>
 </html>`;
+}
+
+function getLoadingWebviewContent() : string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Workspace Storage</title>
+    <style>
+        body,
+        html {
+            height: 100%;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        #loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+
+        .spinner {
+            width: 200px;
+            height: 200px;
+        }
+
+        .spinner rect {
+            fill: #006ead;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <svg class="spinner" width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .spinner_LWk7 {
+                    animation: spinner_GWy6 1.2s linear infinite, spinner_BNNO 1.2s linear infinite
+                }
+
+                .spinner_yOMU {
+                    animation: spinner_GWy6 1.2s linear infinite, spinner_pVqn 1.2s linear infinite;
+                    animation-delay: .15s
+                }
+
+                .spinner_KS4S {
+                    animation: spinner_GWy6 1.2s linear infinite, spinner_6uKB 1.2s linear infinite;
+                    animation-delay: .3s
+                }
+
+                .spinner_zVee {
+                    animation: spinner_GWy6 1.2s linear infinite, spinner_Qw4x 1.2s linear infinite;
+                    animation-delay: .45s
+                }
+
+                @keyframes spinner_GWy6 {
+                    0%,
+                    50% {
+                        width: 9px;
+                        height: 9px
+                    }
+                    10% {
+                        width: 11px;
+                        height: 11px
+                    }
+                }
+
+                @keyframes spinner_BNNO {
+                    0%,
+                    50% {
+                        x: 1.5px;
+                        y: 1.5px
+                    }
+                    10% {
+                        x: .5px;
+                        y: .5px
+                    }
+                }
+
+                @keyframes spinner_pVqn {
+                    0%,
+                    50% {
+                        x: 13.5px;
+                        y: 1.5px
+                    }
+                    10% {
+                        x: 12.5px;
+                        y: .5px
+                    }
+                }
+
+                @keyframes spinner_6uKB {
+                    0%,
+                    50% {
+                        x: 13.5px;
+                        y: 13.5px
+                    }
+                    10% {
+                        x: 12.5px;
+                        y: 12.5px
+                    }
+                }
+
+                @keyframes spinner_Qw4x {
+                    0%,
+                    50% {
+                        x: 1.5px;
+                        y: 13.5px
+                    }
+                    10% {
+                        x: .5px;
+                        y: 12.5px
+                    }
+                }
+            </style>
+            <rect class="spinner_LWk7" x="1.5" y="1.5" rx="1" width="9" height="9" />
+            <rect class="spinner_yOMU" x="13.5" y="1.5" rx="1" width="9" height="9" />
+            <rect class="spinner_KS4S" x="13.5" y="13.5" rx="1" width="9" height="9" />
+            <rect class="spinner_zVee" x="1.5" y="13.5" rx="1" width="9" height="9" />
+        </svg>
+    </div>
+</body>
+</html>`;
+
 }
