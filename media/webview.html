@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Workspace Storage</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" />
+    <link href="style.css" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="loading">
+      <svg class="loading" width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <style></style>
+        <rect class="rect1" x="1.5" y="1.5" rx="1" width="9" height="9" />
+        <rect class="rect2" x="13.5" y="1.5" rx="1" width="9" height="9" />
+        <rect class="rect3" x="13.5" y="13.5" rx="1" width="9" height="9" />
+        <rect class="rect4" x="1.5" y="13.5" rx="1" width="9" height="9" />
+      </svg>
+    </div>
+
+    <div id="content">
+      <br />
+      <button id="toggle-all">Toggle all</button>
+      <button id="toggle-folder-missing">Toggle folder missing</button>
+      <button id="toggle-remote">Toggle remote</button>
+      <button id="toggle-broken">Toggle broken</button>
+      <button id="invert-selection">Invert selection</button>
+      <button id="refresh">Refresh List</button>
+      <br />
+      <br />
+      <table id="workspaces" border="1" cellspacing="0" cellpadding="5" width="100%">
+        <thead>
+          <tr>
+            <th></th>
+            <th title="Folder name of workspace storage">Name</th>
+            <th title="Size of workspace storage">
+              Storage Size
+              <a
+                id="request-all-storage-sizes"
+                class="icon"
+                href="javascript:;"
+                title="Get all workspace storage sizes"
+              >
+                🔍
+              </a>
+            </th>
+            <th title="Path or URL of workspace if available else explanation of absence">Path / URL</th>
+            <th title="Size of workspace folder (actual source codes)">
+              Workspace Size
+              <a id="request-all-workspace-sizes" class="icon" href="javascript:;" title="Get all workspace sizes">
+                🔍
+              </a>
+            </th>
+            <th title="Actions"></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot>
+          <tr>
+            <td></td>
+            <td colspan="5">
+              <span class="workspace-count"></span>
+              item(s) listed
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <br />
+
+      <button id="delete-selected">Delete Selected</button>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
