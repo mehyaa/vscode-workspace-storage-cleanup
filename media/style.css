@@ -105,6 +105,7 @@ body {
 }
 
 .spinner path {
+  fill: #006ead;
   transform-origin: center;
   animation: kf-spinner 0.75s infinite linear;
 }
