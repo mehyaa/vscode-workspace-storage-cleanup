@@ -53,6 +53,10 @@ function onSelectFolderMissing() {
   onSelectCheckboxes('input[type="checkbox"].check.folder-missing');
 }
 
+function onSelectWorkspace() {
+  onSelectCheckboxes('input[type="checkbox"].check.workspace');
+}
+
 function onSelectRemote() {
   onSelectCheckboxes('input[type="checkbox"].check.remote');
 }
@@ -107,7 +111,7 @@ function requestAllWorkspaceSizes() {
   document.querySelectorAll('table[id="workspaces"] td.workspace-size').forEach(e => {
     const workspace = currentWorkspaces.find(w => w.name === e.parentElement.id);
 
-    if (workspace && workspace.path) {
+    if (workspace?.type === 'folder' || workspace?.type === 'workspace') {
       e.innerHTML = spinnerSvg;
     }
   });
@@ -140,30 +144,9 @@ function setWorkspaces(workspaces) {
   setSelectedCheckboxCount(0);
 
   for (const workspace of workspaces) {
-    const checkboxClasses = ['check'];
-
-    let path;
-
-    if (workspace.path) {
-      if (workspace.pathExists) {
-        path = workspace.path;
-      } else {
-        checkboxClasses.push('folder-missing');
-
-        path = `${workspace.path} ❌`;
-      }
-    } else if (workspace.url) {
-      checkboxClasses.push('remote');
-
-      path = workspace.url;
-    } else {
-      checkboxClasses.push('broken');
-
-      path = workspace.note;
-    }
-
     const tr = document.createElement('tr');
     tr.id = workspace.name;
+    tr.dataset.workspace = workspace;
 
     const tdCheckbox = document.createElement('td');
     tdCheckbox.className = 'checkbox';
@@ -195,6 +178,29 @@ function setWorkspaces(workspaces) {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.value = workspace.name;
+
+    const checkboxClasses = ['check'];
+
+    if (workspace.type === 'folder') {
+      checkboxClasses.push('folder');
+
+      if (!workspace.folder?.exists) {
+        checkboxClasses.push('folder-missing');
+      }
+    } else if (workspace.type === 'workspace') {
+      checkboxClasses.push('workspace');
+
+      if (workspace.folders?.some(f => !f.exists)) {
+        checkboxClasses.push('folder-missing');
+      }
+    } else if (workspace.type === 'remote') {
+      checkboxClasses.push('remote');
+    } else if (workspace.type === 'url') {
+      checkboxClasses.push('url');
+    } else {
+      checkboxClasses.push('broken');
+    }
+
     checkbox.className = checkboxClasses.join(' ');
     checkbox.addEventListener('click', event => {
       event.stopPropagation();
@@ -245,14 +251,84 @@ function setWorkspaces(workspaces) {
     tr.appendChild(tdStorageSize);
 
     const tdPath = document.createElement('td');
-    tdPath.className = 'path';
-    tdPath.textContent = path;
+    const tdPathClasses = ['path'];
+
+    if (workspace.type === 'folder') {
+      tdPathClasses.push('folder');
+
+      if (workspace.folder) {
+        if (workspace.folder.exists) {
+          tdPath.textContent = workspace.folder.path;
+
+          tdPathClasses.push('exists');
+        } else {
+          tdPath.textContent = `${workspace.path} ⛓️‍💥`;
+        }
+      } else {
+        tdPath.textContent = 'Folder path not found';
+      }
+    } else if (workspace.type === 'workspace') {
+      tdPathClasses.push('workspace');
+
+      if (workspace.folders && workspace.folders.length > 0) {
+        const divWorkspace = document.createElement('div');
+        divWorkspace.className = 'workspace';
+
+        if (workspace.workspace?.exists) {
+          divWorkspace.textContent = workspace.workspace.path;
+        } else {
+          divWorkspace.textContent = `${workspace.workspace.path} ⛓️‍💥`;
+        }
+
+        tdPath.appendChild(divWorkspace);
+
+        for (const folder of workspace.folders) {
+          const divFolder = document.createElement('div');
+          divFolder.className = 'folder';
+          divFolder.dataset.folder = folder.path;
+
+          const spanPath = document.createElement('span');
+          spanPath.className = 'path';
+          spanPath.textContent = folder.exists ? folder.path : `${folder.path} ⛓️‍💥`;
+          divFolder.appendChild(spanPath);
+
+          const spanSize = document.createElement('span');
+          spanSize.className = 'size';
+          spanSize.textContent = '-';
+          divFolder.appendChild(spanSize);
+
+          divFolder.dataset.folder = folder.path;
+          divFolder.dataset.folderExists = folder.exists;
+
+          tdPath.appendChild(divFolder);
+        }
+      } else {
+        tdPath.textContent = 'Folder paths not found';
+      }
+    } else if (workspace.type === 'remote') {
+      tdPathClasses.push('remote');
+
+      tdPath.textContent = workspace.remote;
+    } else if (workspace.type === 'url') {
+      tdPathClasses.push('url');
+
+      tdPath.textContent = workspace.url;
+    } else {
+      tdPathClasses.push('broken');
+
+      tdPath.textContent = workspace.error;
+    }
+
+    tdPath.className = tdPathClasses.join(' ');
     tr.appendChild(tdPath);
 
     const tdWorkspaceSize = document.createElement('td');
     tdWorkspaceSize.className = 'workspace-size';
 
-    if (workspace.path && workspace.pathExists) {
+    if (
+      (workspace.type === 'folder' && workspace.folder?.exists) ||
+      (workspace.type === 'workspace' && workspace.folders?.some(f => f.exists))
+    ) {
       const aRequestWorkspaceSize = document.createElement('a');
       aRequestWorkspaceSize.href = 'javascript:';
       aRequestWorkspaceSize.className = 'icon';
@@ -354,7 +430,59 @@ function setWorkspaceSizeOnTable(name, size) {
     return;
   }
 
-  td.textContent = size ? humanFileSize(size) : '-';
+  td.textContent = humanFileSize(size);
+}
+
+function setWorkspaceSizesOnTable(name, entries) {
+  const table = document.querySelector('table[id="workspaces"]');
+
+  if (!table) {
+    return;
+  }
+
+  const tr = table.querySelector(`tr[id="${name}"]`);
+
+  if (!tr) {
+    return;
+  }
+
+  const tdPath = tr.querySelector('td.path');
+
+  if (!tdPath) {
+    return;
+  }
+
+  entries = entries ?? [];
+
+  let totalSize = 0;
+
+  tdPath.querySelectorAll('div.folder').forEach(div => {
+    const folder = div.dataset.folder;
+
+    const entry = entries.find(e => e.path === folder);
+
+    const span = div.querySelector('span.size');
+
+    if (entry) {
+      totalSize += entry.size;
+
+      if (span) {
+        span.textContent = humanFileSize(entry.size);
+      }
+    } else {
+      if (span) {
+        span.textContent = '-';
+      }
+    }
+  });
+
+  const tdWorkspaceSize = tr.querySelector('td.workspace-size');
+
+  if (!tdWorkspaceSize) {
+    return;
+  }
+
+  tdWorkspaceSize.textContent = humanFileSize(totalSize);
 }
 
 let currentWorkspaces = [];
@@ -374,12 +502,6 @@ window.addEventListener('message', event => {
 
     case 'set-storage-size':
       {
-        const workspace = currentWorkspaces.find(w => w.name === message.name);
-
-        if (workspace) {
-          workspace.storageSize = message.size;
-        }
-
         setStorageSizeOnTable(message.name, message.size);
       }
 
@@ -387,13 +509,14 @@ window.addEventListener('message', event => {
 
     case 'set-workspace-size':
       {
-        const workspace = currentWorkspaces.find(w => w.name === message.name);
-
-        if (workspace) {
-          workspace.workspaceSize = message.size;
-        }
-
         setWorkspaceSizeOnTable(message.name, message.size);
+      }
+
+      break;
+
+    case 'set-workspace-sizes':
+      {
+        setWorkspaceSizesOnTable(message.name, message.sizes);
       }
 
       break;
@@ -405,6 +528,12 @@ function initializeEvents() {
 
   if (selectFolderMissingButton) {
     selectFolderMissingButton.addEventListener('click', onSelectFolderMissing);
+  }
+
+  const selectWorkspaceButton = document.getElementById('select-workspace');
+
+  if (selectWorkspaceButton) {
+    selectWorkspaceButton.addEventListener('click', onSelectWorkspace);
   }
 
   const selectRemoteButton = document.getElementById('select-remote');

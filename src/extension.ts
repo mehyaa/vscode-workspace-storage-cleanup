@@ -2,18 +2,35 @@ import { Dirent, existsSync } from 'fs';
 
 import { readdir, readFile, rmdir, stat } from 'fs/promises';
 
-import { dirname, join as pathJoin } from 'path';
+import { dirname, isAbsolute, join as pathJoin } from 'path';
 
 import { commands, env, window, ExtensionContext, Uri, ViewColumn, WebviewPanel } from 'vscode';
 
+type WorkspaceType = 'folder' | 'workspace' | 'error' | 'url' | 'remote';
+
+type PathWithExists = {
+  path: string;
+  exists: boolean;
+};
+
+type PathWithSize = {
+  path: string;
+  size: number;
+};
+
+type WorkspaceFolderInfo = {
+  path: string;
+};
+
 type WorkspaceInfo = {
+  type: WorkspaceType;
   name: string;
-  path?: string;
-  pathExists?: boolean;
+  folder?: PathWithExists;
+  workspace?: PathWithExists;
+  folders?: Array<PathWithExists>;
+  remote?: string;
   url?: string;
-  note?: string;
-  workspaceSize?: number;
-  storageSize?: number;
+  error?: string;
 };
 
 type WebviewMessage =
@@ -125,10 +142,8 @@ export function activate(context: ExtensionContext) {
           {
             const workspace = workspaces.find(w => w.name === message.name);
 
-            if (workspace && workspace.path && existsSync(workspace.path)) {
-              const workspaceSize = await getDirSizeAsync(workspace.path);
-
-              postWorkspaceSizeToWebview(workspace.name, workspaceSize);
+            if (workspace) {
+              await calculateAndWorkspaceSizeToWebviewAsync(workspace);
             }
           }
 
@@ -150,11 +165,7 @@ export function activate(context: ExtensionContext) {
         case 'get-all-workspace-sizes':
           {
             for (const workspace of workspaces) {
-              if (workspace && workspace.path && existsSync(workspace.path)) {
-                const workspaceSize = await getDirSizeAsync(workspace.path);
-
-                postWorkspaceSizeToWebview(workspace.name, workspaceSize);
-              }
+              await calculateAndWorkspaceSizeToWebviewAsync(workspace);
             }
           }
 
@@ -174,6 +185,26 @@ export function activate(context: ExtensionContext) {
           }
 
           break;
+      }
+    }
+
+    async function calculateAndWorkspaceSizeToWebviewAsync(workspace: WorkspaceInfo): Promise<void> {
+      if (workspace.folder && existsSync(workspace.folder.path)) {
+        const workspaceSize = await getDirSizeAsync(workspace.folder.path);
+
+        postWorkspaceSizeToWebview(workspace.name, workspaceSize);
+      } else if (workspace.folders && workspace.folders.length > 0) {
+        const workspaceSizes: Array<PathWithSize> = await Promise.all(
+          workspace.folders
+            .filter(folder => existsSync(folder.path))
+            .map(async folder => {
+              const size = await getDirSizeAsync(folder.path);
+
+              return { path: folder.path, size };
+            })
+        );
+
+        postWorkspaceSizesToWebview(workspace.name, workspaceSizes);
       }
     }
 
@@ -261,6 +292,12 @@ export function activate(context: ExtensionContext) {
       currentPanel.webview.postMessage({ command: 'set-workspace-size', name, size });
     }
   }
+
+  function postWorkspaceSizesToWebview(name: string, sizes: Array<PathWithSize>): void {
+    if (currentPanel && !currentPanelDisposed) {
+      currentPanel.webview.postMessage({ command: 'set-workspace-sizes', name, sizes });
+    }
+  }
 }
 
 export function deactivate() {} // eslint-disable-line @typescript-eslint/no-empty-function
@@ -296,33 +333,59 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
 
   if (!existsSync(workspaceInfoFilePath)) {
     return {
+      type: 'error',
       name: dir,
-      note: `No workspace.json under ${workspaceStoragePath}`
+      error: `No workspace.json under ${workspaceStoragePath}`
     };
   }
 
-  const fileContent = await readFile(workspaceInfoFilePath, 'utf8');
+  const workspaceMetaFileContent = await readFile(workspaceInfoFilePath, 'utf8');
 
-  const workspaceInfo = JSON.parse(fileContent);
+  const workspaceMeta = JSON.parse(workspaceMetaFileContent);
 
-  if (workspaceInfo.workspace) {
-    const workspaceFileUri = Uri.parse(workspaceInfo.workspace);
+  if (workspaceMeta.workspace) {
+    const workspaceFileUri = Uri.parse(workspaceMeta.workspace);
 
     if (!workspaceFileUri) {
       return {
+        type: 'error',
         name: dir,
-        note: `Invalid workspace file URI (${workspaceInfo.workspace}) in ${workspaceInfoFilePath}`
+        error: `Invalid workspace file URI (${workspaceMeta.workspace}) in ${workspaceInfoFilePath}`
       };
     }
 
     if (workspaceFileUri.scheme === 'file') {
-      const workspaceFile = workspaceFileUri.fsPath;
+      const workspaceFilePath = workspaceFileUri.fsPath;
 
-      if (workspaceFile) {
+      if (workspaceFilePath) {
+        const workspaceFileContent = await readFile(workspaceFilePath, 'utf8');
+
+        const workspace = JSON.parse(workspaceFileContent);
+
+        const folders: Array<PathWithExists> = workspace.folders.map((folder: WorkspaceFolderInfo) => {
+          if (isAbsolute(folder.path)) {
+            return <PathWithExists>{
+              path: folder.path,
+              exists: existsSync(folder.path)
+            };
+          }
+
+          const workspaceFolderPath = pathJoin(dirname(workspaceFilePath), folder.path);
+
+          return <PathWithExists>{
+            path: workspaceFolderPath,
+            exists: existsSync(workspaceFolderPath)
+          };
+        });
+
         return {
+          type: 'workspace',
           name: dir,
-          path: workspaceFile,
-          pathExists: existsSync(workspaceFile)
+          workspace: {
+            path: workspaceFilePath,
+            exists: existsSync(workspaceFilePath)
+          },
+          folders
         };
       }
     }
@@ -330,18 +393,20 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
     const workspaceUrl = workspaceFileUri.toString();
 
     return {
+      type: 'url',
       name: dir,
       url: workspaceUrl
     };
   }
 
-  if (workspaceInfo.folder) {
-    const workspacePathUri = Uri.parse(workspaceInfo.folder);
+  if (workspaceMeta.folder) {
+    const workspacePathUri = Uri.parse(workspaceMeta.folder);
 
     if (!workspacePathUri) {
       return {
+        type: 'error',
         name: dir,
-        note: `Invalid workspace folder URI (${workspaceInfo.folder}) in ${workspaceInfoFilePath}`
+        error: `Invalid workspace folder URI (${workspaceMeta.folder}) in ${workspaceInfoFilePath}`
       };
     }
 
@@ -350,9 +415,12 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
 
       if (workspacePath) {
         return {
+          type: 'folder',
           name: dir,
-          path: workspacePath,
-          pathExists: existsSync(workspacePath)
+          folder: {
+            path: workspacePath,
+            exists: existsSync(workspacePath)
+          }
         };
       }
     }
@@ -360,20 +428,22 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
     const workspaceUrl = workspacePathUri.toString();
 
     return {
+      type: 'remote',
       name: dir,
-      url: workspaceUrl
+      remote: workspaceUrl
     };
   }
 
   return {
+    type: 'error',
     name: dir,
-    note: `No workspace folder or file URI in ${workspaceInfoFilePath}`
+    error: `No workspace folder or file URI in ${workspaceInfoFilePath}`
   };
 }
 
 function sortWorkspaceInfoArray(first: WorkspaceInfo, second: WorkspaceInfo): number {
-  const firstValue = first.path ?? first.url ?? first.note ?? '';
-  const secondValue = second.path ?? second.url ?? second.note ?? '';
+  const firstValue = first.folder?.path ?? first.url ?? first.error ?? '';
+  const secondValue = second.folder?.path ?? second.url ?? second.error ?? '';
 
   if (firstValue > secondValue) {
     return 1;

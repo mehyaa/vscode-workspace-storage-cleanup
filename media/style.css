@@ -145,6 +145,10 @@ textarea:focus {
   margin-left: 12px;
 }
 
+#content table {
+  border: 1px solid gray;
+}
+
 #content table tr,
 #content table tr td {
   height: 48px;
@@ -172,6 +176,55 @@ textarea:focus {
   font-size: 14px;
 }
 
+#content td.name {
+  padding: 8px;
+  padding-left: 12px;
+}
+
+#content td.path.workspace {
+  padding: 0;
+}
+
+#content td.path:not(.workspace) {
+  padding: 8px;
+  padding-left: 12px;
+}
+
+#content td.path.workspace div.workspace {
+  margin: 0;
+  padding: 8px;
+  padding-left: 12px;
+  border-bottom: 1px solid gray;
+}
+
+#content td.path.workspace div.folder {
+  margin: 0;
+  width: auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid gray;
+}
+
+#content td.path.workspace div.folder:last-of-type {
+  border: 0;
+}
+
+#content td.path.workspace div.folder span.path {
+  padding: 8px;
+  padding-left: 12px;
+  border-right: 1px solid gray;
+  flex: 1;
+}
+
+#content td.path.workspace div.folder span.size {
+  padding: 8px;
+  padding-right: 12px;
+  width: 100px;
+  text-align: right;
+}
+
 #content a {
   text-decoration: none;
   color: #006ead;
@@ -189,4 +242,11 @@ textarea:focus {
 #content td.storage-size,
 #content td.workspace-size {
   text-align: right;
+}
+
+#content td.storage-size:has(> a.icon),
+#content td.storage-size:has(> svg),
+#content td.workspace-size:has(> a.icon),
+#content td.workspace-size:has(> svg) {
+  text-align: center;
 }
