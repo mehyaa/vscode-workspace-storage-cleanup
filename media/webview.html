@@ -19,56 +19,61 @@
     </div>
 
     <div id="content">
-      <br />
-      <button id="toggle-all">Toggle all</button>
-      <button id="toggle-folder-missing">Toggle folder missing</button>
-      <button id="toggle-remote">Toggle remote</button>
-      <button id="toggle-broken">Toggle broken</button>
-      <button id="invert-selection">Invert selection</button>
-      <button id="refresh">Refresh List</button>
-      <br />
-      <br />
-      <table id="workspaces" border="1" cellspacing="0" cellpadding="5" width="100%">
-        <thead>
-          <tr>
-            <th></th>
-            <th title="Folder name of workspace storage">Name</th>
-            <th title="Size of workspace storage">
-              Storage Size
-              <a
-                id="request-all-storage-sizes"
-                class="icon"
-                href="javascript:;"
-                title="Get all workspace storage sizes"
-              >
-                🔍
-              </a>
-            </th>
-            <th title="Path or URL of workspace if available else explanation of absence">Path / URL</th>
-            <th title="Size of workspace folder (actual source codes)">
-              Workspace Size
-              <a id="request-all-workspace-sizes" class="icon" href="javascript:;" title="Get all workspace sizes">
-                🔍
-              </a>
-            </th>
-            <th title="Actions"></th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-        <tfoot>
-          <tr>
-            <td></td>
-            <td colspan="5">
-              <span class="workspace-count"></span>
-              item(s) listed
-            </td>
-          </tr>
-        </tfoot>
-      </table>
-
-      <br />
-
-      <button id="delete-selected">Delete Selected</button>
+      <div id="header">
+        <button id="select-folder-missing">Select folder missing</button>
+        <button id="select-remote">Select remote</button>
+        <button id="select-broken">Select broken</button>
+        <button id="invert-selection">Invert selection</button>
+        <button id="refresh">Refresh Table</button>
+        <button id="delete-selected">Delete Selected</button>
+        <div id="selected-count-container">
+          <span class="selected-count">0</span>
+          item(s) selected
+        </div>
+      </div>
+      <div id="workspaces-container">
+        <table id="workspaces" border="1" cellspacing="0" cellpadding="5" width="100%">
+          <thead>
+            <tr>
+              <th>
+                <label for="select-all">
+                  <input type="checkbox" id="select-all" readonly />
+                </label>
+              </th>
+              <th title="Folder name of workspace storage">Name</th>
+              <th title="Size of workspace storage">
+                Storage Size
+                <a
+                  id="request-all-storage-sizes"
+                  class="icon"
+                  href="javascript:;"
+                  title="Get all workspace storage sizes"
+                >
+                  🔍
+                </a>
+              </th>
+              <th title="Path or URL of workspace if available else explanation of absence">Path / URL</th>
+              <th title="Size of workspace folder (actual source codes)">
+                Workspace Size
+                <a id="request-all-workspace-sizes" class="icon" href="javascript:;" title="Get all workspace sizes">
+                  🔍
+                </a>
+              </th>
+              <th title="Actions"></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+          <tfoot>
+            <tr>
+              <td></td>
+              <td colspan="5">
+                <span class="workspace-count"></span>
+                item(s) listed
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
 
     <script src="script.js"></script>

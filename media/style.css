@@ -11,6 +11,12 @@ body {
   height: 100%;
 }
 
+a:focus,
+input:focus,
+textarea:focus {
+  outline: none;
+}
+
 .loading {
   width: 200px;
   height: 200px;
@@ -120,6 +126,23 @@ body {
   display: none;
   width: 100%;
   height: 100%;
+  padding-top: 20px;
+}
+
+#header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+#header > button {
+  margin-right: 3px;
+  height: 32px;
+}
+
+#selected-count-container {
+  margin-left: 12px;
 }
 
 #content table tr,
@@ -131,20 +154,39 @@ body {
   font-size: 16px;
 }
 
+#content th:first-of-type {
+  padding: 0;
+}
+
+#content th:first-of-type label[for='select-all'] {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 48px;
+  margin: 0;
+  padding: 0;
+}
+
 #content td {
   font-size: 14px;
 }
 
-a {
+#content a {
   text-decoration: none;
   color: #006ead;
 }
 
-a.icon {
+#content a.icon {
   font-size: 24px;
 }
 
-.storage-size,
-.workspace-size {
+#content td.checkbox,
+#content td.actions {
+  text-align: center;
+}
+
+#content td.storage-size,
+#content td.workspace-size {
   text-align: right;
 }

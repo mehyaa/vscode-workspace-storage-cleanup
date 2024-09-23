@@ -1,3 +1,6 @@
+const indexOf = Array.prototype.indexOf;
+const map = Array.prototype.map;
+
 const spinnerSvg =
   '<svg class="spinner" width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
   '<path d="M10.14,1.16a11,11,0,0,0-9,8.92A1.59,1.59,0,0,0,2.46,12,1.52,1.52,0,0,0,4.11,10.7a8,8,0,0,1,6.66-6.61A1.42,1.42,0,0,0,12,2.69h0A1.57,1.57,0,0,0,10.14,1.16Z" />' +
@@ -21,8 +24,8 @@ function onDelete(workspace) {
 }
 
 function onDeleteSelected() {
-  const selectedElements = document.querySelectorAll('input[type="checkbox"].check:checked');
-  const selectedWorkspaces = Array.prototype.map.call(selectedElements, e => e.value);
+  const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"].check:checked');
+  const selectedWorkspaces = map.call(selectedCheckboxes, e => e.value);
 
   vscode.postMessage({
     command: 'delete',
@@ -30,33 +33,38 @@ function onDeleteSelected() {
   });
 }
 
-function onToggleCheckboxes(selector) {
-  const allElements = document.querySelectorAll(selector);
-  const selectedElements = document.querySelectorAll(selector + ':checked');
+function setSelectedCheckboxCount(count) {
+  if (count == null) {
+    const checkedCheckboxes = document.querySelectorAll('input[type="checkbox"].check:checked');
 
-  allElements.length === selectedElements.length
-    ? document.querySelectorAll(selector).forEach(e => (e.checked = false))
-    : document.querySelectorAll(selector).forEach(e => (e.checked = true));
+    count = checkedCheckboxes.length;
+  }
+
+  document.querySelectorAll('span.selected-count').forEach(e => (e.textContent = count));
 }
 
-function onToggleAll() {
-  onToggleCheckboxes('input[type="checkbox"].check');
+function onSelectCheckboxes(selector) {
+  document.querySelectorAll(selector).forEach(e => (e.checked = true));
+
+  setSelectedCheckboxCount();
 }
 
-function onToggleFolderMissing() {
-  onToggleCheckboxes('input[type="checkbox"].check.folder-missing');
+function onSelectFolderMissing() {
+  onSelectCheckboxes('input[type="checkbox"].check.folder-missing');
 }
 
-function onToggleRemote() {
-  onToggleCheckboxes('input[type="checkbox"].check.remote');
+function onSelectRemote() {
+  onSelectCheckboxes('input[type="checkbox"].check.remote');
 }
 
-function onToggleBroken() {
-  onToggleCheckboxes('input[type="checkbox"].check.broken');
+function onSelectBroken() {
+  onSelectCheckboxes('input[type="checkbox"].check.broken');
 }
 
 function onInvertSelection() {
   document.querySelectorAll('input[type="checkbox"].check').forEach(e => (e.checked = !e.checked));
+
+  setSelectedCheckboxCount();
 }
 
 function onRefresh() {
@@ -105,225 +113,232 @@ function requestAllWorkspaceSizes() {
   });
 }
 
+let lastCheckedCheckbox = null;
+
 function setWorkspaces(workspaces) {
-  const tableEl = document.querySelector('table[id="workspaces"]');
+  const table = document.querySelector('table[id="workspaces"]');
 
-  const tableBodyEl = tableEl.querySelector('tbody');
+  const tbody = table.querySelector('tbody');
 
-  tableBodyEl.innerHTML = '';
+  tbody.innerHTML = '';
+
+  lastCheckedCheckbox = null;
+
+  const selectAllCheckbox = document.getElementById('select-all');
+
+  if (selectAllCheckbox) {
+    selectAllCheckbox.checked = false;
+  }
+
+  setSelectedCheckboxCount(0);
 
   for (const workspace of workspaces) {
+    const checkboxClasses = ['check'];
+
+    let path;
+
     if (workspace.path) {
-      const icon = !workspace.pathExists ? ' ❌' : '';
+      if (workspace.pathExists) {
+        path = workspace.path;
+      } else {
+        checkboxClasses.push('folder-missing');
 
-      const rowEl = document.createElement('tr');
-      rowEl.id = workspace.name;
-
-      const cellEl = document.createElement('td');
-      cellEl.className = 'checkbox';
-      const inputEl = document.createElement('input');
-      inputEl.className = `check ${icon ? 'folder-missing' : ''}`;
-      inputEl.type = 'checkbox';
-      inputEl.value = workspace.name;
-      cellEl.appendChild(inputEl);
-      rowEl.appendChild(cellEl);
-
-      const cellEl2 = document.createElement('td');
-      cellEl2.className = 'name';
-      cellEl2.textContent = workspace.name;
-      rowEl.appendChild(cellEl2);
-
-      const cellEl3 = document.createElement('td');
-      cellEl3.className = 'storage-size';
-      const aEl = document.createElement('a');
-      aEl.className = 'icon';
-      aEl.href = 'javascript:';
-      aEl.onclick = () => requestStorageSize(workspace.name, cellEl3);
-      aEl.textContent = '🔍';
-      cellEl3.appendChild(aEl);
-      rowEl.appendChild(cellEl3);
-
-      const cellEl4 = document.createElement('td');
-      cellEl4.className = 'path';
-      cellEl4.textContent = workspace.path + icon;
-      rowEl.appendChild(cellEl4);
-
-      const cellEl5 = document.createElement('td');
-      cellEl5.className = 'workspace-size';
-      const a2El = document.createElement('a');
-      a2El.className = 'icon';
-      a2El.href = 'javascript:';
-      a2El.onclick = () => requestWorkspaceSize(workspace.name, cellEl5);
-      a2El.textContent = '🔍';
-      cellEl5.appendChild(a2El);
-      rowEl.appendChild(cellEl5);
-
-      const cellEl6 = document.createElement('td');
-      cellEl6.className = 'actions';
-      const a3El = document.createElement('a');
-      a3El.href = 'javascript:';
-      a3El.onclick = () => onDelete(workspace.name);
-      a3El.textContent = 'Delete';
-      cellEl6.appendChild(a3El);
-      rowEl.appendChild(cellEl6);
-
-      tableBodyEl.appendChild(rowEl);
+        path = `${workspace.path} ❌`;
+      }
     } else if (workspace.url) {
-      const rowEl = document.createElement('tr');
-      rowEl.id = workspace.name;
+      checkboxClasses.push('remote');
 
-      const cellEl = document.createElement('td');
-      cellEl.className = 'checkbox';
-      const inputEl = document.createElement('input');
-      inputEl.className = 'check remote';
-      inputEl.type = 'checkbox';
-      inputEl.value = workspace.name;
-      cellEl.appendChild(inputEl);
-      rowEl.appendChild(cellEl);
-
-      const cellEl2 = document.createElement('td');
-      cellEl2.className = 'name';
-      cellEl2.textContent = workspace.name;
-      rowEl.appendChild(cellEl2);
-
-      const cellEl3 = document.createElement('td');
-      cellEl3.className = 'storage-size';
-      const aEl = document.createElement('a');
-      aEl.className = 'icon';
-      aEl.href = 'javascript:';
-      aEl.onclick = () => requestStorageSize(workspace.name, cellEl3);
-      aEl.textContent = '🔍';
-      cellEl3.appendChild(aEl);
-      rowEl.appendChild(cellEl3);
-
-      const cellEl4 = document.createElement('td');
-      cellEl4.className = 'path';
-      cellEl4.textContent = workspace.url;
-      rowEl.appendChild(cellEl4);
-
-      const cellEl5 = document.createElement('td');
-      cellEl5.className = 'workspace-size';
-      cellEl5.textContent = '-';
-      rowEl.appendChild(cellEl5);
-
-      const cellEl6 = document.createElement('td');
-      cellEl6.className = 'actions';
-      const a2El = document.createElement('a');
-      a2El.href = 'javascript:';
-      a2El.onclick = () => onDelete(workspace.name);
-      a2El.textContent = 'Delete';
-      cellEl6.appendChild(a2El);
-      rowEl.appendChild(cellEl6);
-
-      tableBodyEl.appendChild(rowEl);
+      path = workspace.url;
     } else {
-      const rowEl = document.createElement('tr');
-      rowEl.id = workspace.name;
+      checkboxClasses.push('broken');
 
-      const cellEl = document.createElement('td');
-      cellEl.className = 'checkbox';
-      const inputEl = document.createElement('input');
-      inputEl.className = 'check broken';
-      inputEl.type = 'checkbox';
-      inputEl.value = workspace.name;
-      cellEl.appendChild(inputEl);
-      rowEl.appendChild(cellEl);
-
-      const cellEl2 = document.createElement('td');
-      cellEl2.className = 'name';
-      cellEl2.textContent = workspace.name;
-      rowEl.appendChild(cellEl2);
-
-      const cellEl3 = document.createElement('td');
-      cellEl3.className = 'storage-size';
-      const aEl = document.createElement('a');
-      aEl.className = 'icon';
-      aEl.href = 'javascript:';
-      aEl.onclick = () => requestStorageSize(workspace.name, cellEl3);
-      aEl.textContent = '🔍';
-      cellEl3.appendChild(aEl);
-      rowEl.appendChild(cellEl3);
-
-      const cellEl4 = document.createElement('td');
-      cellEl4.className = 'path';
-      cellEl4.textContent = workspace.note;
-      rowEl.appendChild(cellEl4);
-
-      const cellEl5 = document.createElement('td');
-      cellEl5.className = 'workspace-size';
-      cellEl5.textContent = '-';
-      rowEl.appendChild(cellEl5);
-
-      const cellEl6 = document.createElement('td');
-      cellEl6.className = 'actions';
-      const a2El = document.createElement('a');
-      a2El.href = 'javascript:';
-      a2El.onclick = () => onDelete(workspace.name);
-      a2El.textContent = 'Delete';
-      cellEl6.appendChild(a2El);
-      rowEl.appendChild(cellEl6);
-
-      tableBodyEl.appendChild(rowEl);
+      path = workspace.note;
     }
+
+    const tr = document.createElement('tr');
+    tr.id = workspace.name;
+
+    const tdCheckbox = document.createElement('td');
+    tdCheckbox.className = 'checkbox';
+
+    function handleCheckboxClick(checkbox, shiftKey) {
+      if (!lastCheckedCheckbox) {
+        lastCheckedCheckbox = checkbox;
+        return;
+      }
+
+      if (shiftKey) {
+        const rowCheckboxes = document.querySelectorAll('input[type="checkbox"].check');
+
+        let start = indexOf.call(rowCheckboxes, checkbox);
+        let end = indexOf.call(rowCheckboxes, lastCheckedCheckbox);
+
+        if (start > end) {
+          [start, end] = [end, start];
+        }
+
+        for (let i = start; i <= end; i++) {
+          rowCheckboxes[i].checked = lastCheckedCheckbox.checked;
+        }
+      }
+
+      lastCheckedCheckbox = checkbox;
+    }
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = workspace.name;
+    checkbox.className = checkboxClasses.join(' ');
+    checkbox.addEventListener('click', event => {
+      event.stopPropagation();
+
+      handleCheckboxClick(checkbox, event.shiftKey);
+    });
+    checkbox.addEventListener('change', event => {
+      const checkedCheckboxes = document.querySelectorAll('input[type="checkbox"].check:checked');
+
+      if (selectAllCheckbox) {
+        selectAllCheckbox.checked =
+          document.querySelectorAll('input[type="checkbox"].check').length === checkedCheckboxes.length;
+      }
+
+      setSelectedCheckboxCount(checkedCheckboxes.length);
+    });
+    tdCheckbox.appendChild(checkbox);
+    tr.appendChild(tdCheckbox);
+
+    const tdName = document.createElement('td');
+    tdName.className = 'name';
+    tdName.textContent = workspace.name;
+    tr.appendChild(tdName);
+
+    const tdStorageSize = document.createElement('td');
+    tdStorageSize.className = 'storage-size';
+
+    const aRequestStorageSize = document.createElement('a');
+    aRequestStorageSize.href = 'javascript:';
+    aRequestStorageSize.className = 'icon';
+    aRequestStorageSize.textContent = '🔍';
+    aRequestStorageSize.title = 'Get storage size';
+    aRequestStorageSize.addEventListener('click', event => {
+      event.stopPropagation();
+
+      requestStorageSize(workspace.name, tdStorageSize);
+    });
+    tdStorageSize.appendChild(aRequestStorageSize);
+    tr.appendChild(tdStorageSize);
+
+    const tdPath = document.createElement('td');
+    tdPath.className = 'path';
+    tdPath.textContent = path;
+    tr.appendChild(tdPath);
+
+    const tdWorkspaceSize = document.createElement('td');
+    tdWorkspaceSize.className = 'workspace-size';
+
+    if (workspace.path && workspace.pathExists) {
+      const aRequestWorkspaceSize = document.createElement('a');
+      aRequestWorkspaceSize.href = 'javascript:';
+      aRequestWorkspaceSize.className = 'icon';
+      aRequestWorkspaceSize.textContent = '🔍';
+      aRequestWorkspaceSize.title = 'Get workspace size';
+      aRequestWorkspaceSize.addEventListener('click', event => {
+        event.stopPropagation();
+
+        requestWorkspaceSize(workspace.name, tdWorkspaceSize);
+      });
+      tdWorkspaceSize.appendChild(aRequestWorkspaceSize);
+    } else {
+      tdWorkspaceSize.textContent = '-';
+    }
+
+    tr.appendChild(tdWorkspaceSize);
+
+    const tdActions = document.createElement('td');
+    tdActions.className = 'actions';
+
+    const aDelete = document.createElement('a');
+    aDelete.href = 'javascript:';
+    aDelete.textContent = 'Delete';
+    aDelete.title = 'Delete workspace';
+    aDelete.addEventListener('click', event => {
+      event.stopPropagation();
+
+      onDelete(workspace.name);
+    });
+    tdActions.appendChild(aDelete);
+    tr.appendChild(tdActions);
+
+    tr.addEventListener('click', event => {
+      checkbox.checked = !checkbox.checked;
+
+      const checkboxChangeEvent = new Event('change');
+
+      checkbox.dispatchEvent(checkboxChangeEvent);
+
+      handleCheckboxClick(checkbox, event.shiftKey);
+    });
+
+    tbody.appendChild(tr);
   }
 
-  const loadingEl = document.getElementById('loading');
+  const loading = document.getElementById('loading');
 
-  if (loadingEl) {
-    loadingEl.style.display = 'none';
+  if (loading) {
+    loading.style.display = 'none';
   }
 
-  const contentEl = document.getElementById('content');
+  const content = document.getElementById('content');
 
-  if (contentEl) {
-    contentEl.style.display = 'block';
+  if (content) {
+    content.style.display = 'block';
   }
 
   document.querySelectorAll('span.workspace-count').forEach(e => (e.textContent = workspaces.length));
 }
 
 function setStorageSizeOnTable(name, size) {
-  const tableEl = document.querySelector('table[id="workspaces"]');
+  const table = document.querySelector('table[id="workspaces"]');
 
-  if (!tableEl) {
+  if (!table) {
     return;
   }
 
-  const rowEl = tableEl.querySelector(`tr[id="${name}"]`);
+  const tr = table.querySelector(`tr[id="${name}"]`);
 
-  if (!rowEl) {
+  if (!tr) {
     return;
   }
 
-  const cellEl = rowEl.querySelector('td.storage-size');
+  const td = tr.querySelector('td.storage-size');
 
-  if (!cellEl) {
+  if (!td) {
     return;
   }
 
-  cellEl.textContent = humanFileSize(size);
+  td.textContent = humanFileSize(size);
 }
 
 function setWorkspaceSizeOnTable(name, size) {
-  const tableEl = document.querySelector('table[id="workspaces"]');
+  const table = document.querySelector('table[id="workspaces"]');
 
-  if (!tableEl) {
+  if (!table) {
     return;
   }
 
-  const rowEl = tableEl.querySelector(`tr[id="${name}"]`);
+  const tr = table.querySelector(`tr[id="${name}"]`);
 
-  if (!rowEl) {
+  if (!tr) {
     return;
   }
 
-  const cellEl = rowEl.querySelector('td.workspace-size');
+  const td = tr.querySelector('td.workspace-size');
 
-  if (!cellEl) {
+  if (!td) {
     return;
   }
 
-  cellEl.textContent = size ? humanFileSize(size) : '-';
+  td.textContent = size ? humanFileSize(size) : '-';
 }
 
 let currentWorkspaces = [];
@@ -370,58 +385,62 @@ window.addEventListener('message', event => {
 });
 
 function initializeEvents() {
-  const toggleAllEl = document.getElementById('toggle-all');
+  const selectFolderMissingButton = document.getElementById('select-folder-missing');
 
-  if (toggleAllEl) {
-    toggleAllEl.onclick = onToggleAll;
+  if (selectFolderMissingButton) {
+    selectFolderMissingButton.addEventListener('click', onSelectFolderMissing);
   }
 
-  const toggleFolderMissingEl = document.getElementById('toggle-folder-missing');
+  const selectRemoteButton = document.getElementById('select-remote');
 
-  if (toggleFolderMissingEl) {
-    toggleFolderMissingEl.onclick = onToggleFolderMissing;
+  if (selectRemoteButton) {
+    selectRemoteButton.addEventListener('click', onSelectRemote);
   }
 
-  const toggleRemoteEl = document.getElementById('toggle-remote');
+  const selectBrokenButton = document.getElementById('select-broken');
 
-  if (toggleRemoteEl) {
-    toggleRemoteEl.onclick = onToggleRemote;
+  if (selectBrokenButton) {
+    selectBrokenButton.addEventListener('click', onSelectBroken);
   }
 
-  const toggleBrokenEl = document.getElementById('toggle-broken');
+  const invertSelectionButton = document.getElementById('invert-selection');
 
-  if (toggleBrokenEl) {
-    toggleBrokenEl.onclick = onToggleBroken;
+  if (invertSelectionButton) {
+    invertSelectionButton.addEventListener('click', onInvertSelection);
   }
 
-  const invertSelectionEl = document.getElementById('invert-selection');
+  const refreshButton = document.getElementById('refresh');
 
-  if (invertSelectionEl) {
-    invertSelectionEl.onclick = onInvertSelection;
+  if (refreshButton) {
+    refreshButton.addEventListener('click', onRefresh);
   }
 
-  const refreshEl = document.getElementById('refresh');
+  const selectAllCheckbox = document.getElementById('select-all');
 
-  if (refreshEl) {
-    refreshEl.onclick = onRefresh;
+  if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener('change', () => {
+      document.querySelectorAll('input[type="checkbox"].check').forEach(cb => (cb.checked = selectAllCheckbox.checked));
+
+      setSelectedCheckboxCount(selectAllCheckbox.checked ? currentWorkspaces.length : 0);
+    });
   }
 
-  const deleteSelectedEl = document.getElementById('delete-selected');
+  const requestAllStorageSizesIcon = document.getElementById('request-all-storage-sizes');
 
-  if (deleteSelectedEl) {
-    deleteSelectedEl.onclick = onDeleteSelected;
+  if (requestAllStorageSizesIcon) {
+    requestAllStorageSizesIcon.addEventListener('click', requestAllStorageSizes);
   }
 
-  const requestAllStorageSizesEl = document.getElementById('request-all-storage-sizes');
+  const requestAllWorkspaceSizesIcon = document.getElementById('request-all-workspace-sizes');
 
-  if (requestAllStorageSizesEl) {
-    requestAllStorageSizesEl.onclick = requestAllStorageSizes;
+  if (requestAllWorkspaceSizesIcon) {
+    requestAllWorkspaceSizesIcon.addEventListener('click', requestAllWorkspaceSizes);
   }
 
-  const requestAllWorkspaceSizesEl = document.getElementById('request-all-workspace-sizes');
+  const deleteSelectedButton = document.getElementById('delete-selected');
 
-  if (requestAllWorkspaceSizesEl) {
-    requestAllWorkspaceSizesEl.onclick = requestAllWorkspaceSizes;
+  if (deleteSelectedButton) {
+    deleteSelectedButton.addEventListener('click', onDeleteSelected);
   }
 
   onRefresh();
