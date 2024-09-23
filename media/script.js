@@ -113,6 +113,13 @@ function requestAllWorkspaceSizes() {
   });
 }
 
+function requestBrowseWorkspace(name) {
+  vscode.postMessage({
+    command: 'browse-workspace',
+    name: name
+  });
+}
+
 let lastCheckedCheckbox = null;
 
 function setWorkspaces(workspaces) {
@@ -209,7 +216,16 @@ function setWorkspaces(workspaces) {
 
     const tdName = document.createElement('td');
     tdName.className = 'name';
-    tdName.textContent = workspace.name;
+
+    const aBrowse = document.createElement('a');
+    aBrowse.href = 'javascript:';
+    aBrowse.textContent = workspace.name;
+    aBrowse.addEventListener('click', event => {
+      event.stopPropagation();
+
+      requestBrowseWorkspace(workspace.name);
+    });
+    tdName.appendChild(aBrowse);
     tr.appendChild(tdName);
 
     const tdStorageSize = document.createElement('td');

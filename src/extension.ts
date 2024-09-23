@@ -4,7 +4,7 @@ import { readdir, readFile, rmdir, stat } from 'fs/promises';
 
 import { dirname, join as pathJoin } from 'path';
 
-import { commands, window, ExtensionContext, Uri, ViewColumn, WebviewPanel } from 'vscode';
+import { commands, env, window, ExtensionContext, Uri, ViewColumn, WebviewPanel } from 'vscode';
 
 type WorkspaceInfo = {
   name: string;
@@ -37,6 +37,10 @@ type WebviewMessage =
     }
   | {
       command: 'get-all-workspace-sizes';
+    }
+  | {
+      command: 'browse-workspace';
+      name: string;
     };
 
 const nonceCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -150,6 +154,21 @@ export function activate(context: ExtensionContext) {
                 const workspaceSize = await getDirSizeAsync(workspace.path);
 
                 postWorkspaceSizeToWebview(workspace.name, workspaceSize);
+              }
+            }
+          }
+
+          break;
+
+        case 'browse-workspace':
+          {
+            const workspaceStoragePath = pathJoin(workspaceStorageRootPath, message.name);
+
+            if (existsSync(workspaceStoragePath)) {
+              const success = env.openExternal(Uri.file(workspaceStoragePath));
+
+              if (!success) {
+                window.showErrorMessage(`Could not open '${workspaceStoragePath}'`);
               }
             }
           }
