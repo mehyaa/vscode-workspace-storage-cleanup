@@ -250,6 +250,43 @@ function setWorkspaces(workspaces) {
     tdStorageSize.appendChild(aRequestStorageSize);
     tr.appendChild(tdStorageSize);
 
+    const tdType = document.createElement('td');
+    tdType.className = 'type';
+    switch (workspace.type) {
+      case 'folder':
+        tdType.textContent = 'Folder';
+        break;
+      case 'remote':
+        switch (workspace.remote.type) {
+          case 'dev-container':
+            tdType.textContent = 'Remote (Dev Container)';
+            break;
+          case 'github':
+            tdType.textContent = 'Remote (GitHub Repository)';
+            break;
+          case 'github-codespaces':
+            tdType.textContent = 'Remote (GitHub Codespaces)';
+            break;
+          case 'ssh':
+            tdType.textContent = 'Remote (SSH)';
+            break;
+          case 'wsl':
+            tdType.textContent = 'Remote (WSL)';
+            break;
+          default:
+            tdType.textContent = 'Remote';
+            break;
+        }
+        break;
+      case 'workspace':
+        tdType.textContent = 'Workspace';
+        break;
+      default:
+        tdType.textContent = 'Error';
+        break;
+    }
+    tr.appendChild(tdType);
+
     const tdPath = document.createElement('td');
     const tdPathClasses = ['path'];
 
@@ -270,19 +307,19 @@ function setWorkspaces(workspaces) {
     } else if (workspace.type === 'workspace') {
       tdPathClasses.push('workspace');
 
-      if (workspace.folders && workspace.folders.length > 0) {
-        const divWorkspace = document.createElement('div');
-        divWorkspace.className = 'workspace';
+      const divWorkspace = document.createElement('div');
+      divWorkspace.className = 'workspace';
 
-        if (workspace.workspace?.exists) {
-          divWorkspace.textContent = workspace.workspace.path;
-        } else {
-          divWorkspace.textContent = `${workspace.workspace.path} ⛓️‍💥`;
-        }
+      if (workspace.workspace.exists) {
+        divWorkspace.textContent = workspace.workspace.path;
+      } else {
+        divWorkspace.textContent = `${workspace.workspace.path} ⛓️‍💥`;
+      }
 
-        tdPath.appendChild(divWorkspace);
+      tdPath.appendChild(divWorkspace);
 
-        for (const folder of workspace.folders) {
+      if (workspace.workspace.folders && workspace.workspace.folders.length > 0) {
+        for (const folder of workspace.workspace.folders) {
           const divFolder = document.createElement('div');
           divFolder.className = 'folder';
           divFolder.dataset.folder = folder.path;
@@ -303,16 +340,12 @@ function setWorkspaces(workspaces) {
           tdPath.appendChild(divFolder);
         }
       } else {
-        tdPath.textContent = 'Folder paths not found';
+        tdPath.textContent = 'Workspace folders not found';
       }
     } else if (workspace.type === 'remote') {
       tdPathClasses.push('remote');
 
-      tdPath.textContent = workspace.remote;
-    } else if (workspace.type === 'url') {
-      tdPathClasses.push('url');
-
-      tdPath.textContent = workspace.url;
+      tdPath.textContent = workspace.remote.path;
     } else {
       tdPathClasses.push('broken');
 
@@ -326,8 +359,8 @@ function setWorkspaces(workspaces) {
     tdWorkspaceSize.className = 'workspace-size';
 
     if (
-      (workspace.type === 'folder' && workspace.folder?.exists) ||
-      (workspace.type === 'workspace' && workspace.folders?.some(f => f.exists))
+      (workspace.type === 'folder' && workspace.folder.exists) ||
+      (workspace.type === 'workspace' && workspace.workspace.folders.some(f => f.exists))
     ) {
       const aRequestWorkspaceSize = document.createElement('a');
       aRequestWorkspaceSize.href = 'javascript:';

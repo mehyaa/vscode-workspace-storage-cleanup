@@ -222,7 +222,7 @@ textarea:focus {
   padding: 8px;
   padding-right: 12px;
   width: 100px;
-  text-align: right;
+  text-align: center;
 }
 
 #content a {
@@ -235,18 +235,9 @@ textarea:focus {
 }
 
 #content td.checkbox,
-#content td.actions {
-  text-align: center;
-}
-
+#content td.type,
 #content td.storage-size,
-#content td.workspace-size {
-  text-align: right;
-}
-
-#content td.storage-size:has(> a.icon),
-#content td.storage-size:has(> svg),
-#content td.workspace-size:has(> a.icon),
-#content td.workspace-size:has(> svg) {
+#content td.workspace-size,
+#content td.actions {
   text-align: center;
 }

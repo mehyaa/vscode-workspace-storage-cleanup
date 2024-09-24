@@ -1,44 +1,22 @@
 import { existsSync } from 'fs';
 
-import { readdir, readFile, rmdir } from 'fs/promises';
+import { readFile, rmdir } from 'fs/promises';
 
-import { dirname, isAbsolute, join as pathJoin } from 'path';
+import { dirname, join as pathJoin } from 'path';
 
 import { commands, env, window, Uri, ViewColumn } from 'vscode';
 
-import { parse as jsonParse } from 'jsonc-parser';
-
 import { getDirSizeAsync, getNonce } from './utils';
+
+import { getWorkspacesAsync } from './workspace';
 
 import type { ExtensionContext, WebviewPanel } from 'vscode';
 
-import type { ParseOptions } from 'jsonc-parser';
-
-type WorkspaceType = 'folder' | 'workspace' | 'error' | 'url' | 'remote';
-
-type PathWithExists = {
-  path: string;
-  exists: boolean;
-};
+import type { WorkspaceInfo } from './workspace';
 
 type PathWithSize = {
   path: string;
   size: number;
-};
-
-type WorkspaceFolderInfo = {
-  path: string;
-};
-
-type WorkspaceInfo = {
-  type: WorkspaceType;
-  name: string;
-  folder?: PathWithExists;
-  workspace?: PathWithExists;
-  folders?: Array<PathWithExists>;
-  remote?: string;
-  url?: string;
-  error?: string;
 };
 
 type WebviewMessage =
@@ -68,12 +46,6 @@ type WebviewMessage =
       name: string;
     };
 
-const jsonParseOptions: ParseOptions = {
-  disallowComments: false,
-  allowTrailingComma: true,
-  allowEmptyContent: true
-};
-
 export function activate(context: ExtensionContext) {
   let currentPanel: WebviewPanel | undefined = undefined;
   let currentPanelDisposed: boolean = false;
@@ -88,7 +60,7 @@ export function activate(context: ExtensionContext) {
     const globalStoragePath = dirname(context.globalStorageUri.fsPath);
 
     if (!globalStoragePath) {
-      window.showErrorMessage('Could not get global storage path.');
+      window.showErrorMessage('Could not get global storage path');
 
       return;
     }
@@ -205,9 +177,9 @@ export function activate(context: ExtensionContext) {
         const workspaceSize = await getDirSizeAsync(workspace.folder.path);
 
         postWorkspaceSizeToWebview(workspace.name, workspaceSize);
-      } else if (workspace.folders && workspace.folders.length > 0) {
+      } else if (workspace.workspace && workspace.workspace.folders.length > 0) {
         const workspaceSizes: Array<PathWithSize> = await Promise.all(
-          workspace.folders
+          workspace.workspace.folders
             .filter(folder => existsSync(folder.path))
             .map(async folder => {
               const size = await getDirSizeAsync(folder.path);
@@ -313,155 +285,3 @@ export function activate(context: ExtensionContext) {
 }
 
 export function deactivate() {} // eslint-disable-line @typescript-eslint/no-empty-function
-
-async function getWorkspacesAsync(workspaceStorageRootPath: string): Promise<Array<WorkspaceInfo>> {
-  const allItems = await readdir(workspaceStorageRootPath, { withFileTypes: true });
-
-  const directories = allItems.filter(i => i.isDirectory()).map(dir => dir.name);
-
-  const workspaces: Array<WorkspaceInfo> = await Promise.all(
-    directories.map(dir => getWorkspaceInfoAsync(workspaceStorageRootPath, dir))
-  );
-
-  workspaces.sort(sortWorkspaceInfoArray);
-
-  return workspaces;
-}
-
-async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: string): Promise<WorkspaceInfo> {
-  const workspaceStoragePath = pathJoin(workspaceStorageRootPath, dir);
-
-  const workspaceInfoFilePath = pathJoin(workspaceStoragePath, 'workspace.json');
-
-  if (!existsSync(workspaceInfoFilePath)) {
-    return {
-      type: 'error',
-      name: dir,
-      error: `No workspace.json under ${workspaceStoragePath}`
-    };
-  }
-
-  const workspaceMetaFileContent = await readFile(workspaceInfoFilePath, 'utf8');
-
-  const workspaceMeta = jsonParse(workspaceMetaFileContent, [], jsonParseOptions);
-
-  if (workspaceMeta.workspace) {
-    const workspaceFileUri = Uri.parse(workspaceMeta.workspace);
-
-    if (!workspaceFileUri) {
-      return {
-        type: 'error',
-        name: dir,
-        error: `Invalid workspace file URI (${workspaceMeta.workspace}) in ${workspaceInfoFilePath}`
-      };
-    }
-
-    if (workspaceFileUri.scheme === 'file') {
-      const workspaceFilePath = workspaceFileUri.fsPath;
-
-      if (workspaceFilePath) {
-        const workspaceFileContent = await readFile(workspaceFilePath, 'utf8');
-
-        const workspace = jsonParse(workspaceFileContent, [], jsonParseOptions);
-
-        const folders: Array<PathWithExists> = workspace.folders.map((folder: WorkspaceFolderInfo) => {
-          if (isAbsolute(folder.path)) {
-            return <PathWithExists>{
-              path: folder.path,
-              exists: existsSync(folder.path)
-            };
-          }
-
-          const workspaceFolderPath = pathJoin(dirname(workspaceFilePath), folder.path);
-
-          return <PathWithExists>{
-            path: workspaceFolderPath,
-            exists: existsSync(workspaceFolderPath)
-          };
-        });
-
-        return {
-          type: 'workspace',
-          name: dir,
-          workspace: {
-            path: workspaceFilePath,
-            exists: existsSync(workspaceFilePath)
-          },
-          folders
-        };
-      }
-    }
-
-    const workspaceUrl = workspaceFileUri.toString();
-
-    return {
-      type: 'url',
-      name: dir,
-      url: workspaceUrl
-    };
-  }
-
-  if (workspaceMeta.folder) {
-    const workspacePathUri = Uri.parse(workspaceMeta.folder);
-
-    if (!workspacePathUri) {
-      return {
-        type: 'error',
-        name: dir,
-        error: `Invalid workspace folder URI (${workspaceMeta.folder}) in ${workspaceInfoFilePath}`
-      };
-    }
-
-    if (workspacePathUri.scheme === 'file') {
-      const workspacePath = workspacePathUri.fsPath;
-
-      if (workspacePath) {
-        return {
-          type: 'folder',
-          name: dir,
-          folder: {
-            path: workspacePath,
-            exists: existsSync(workspacePath)
-          }
-        };
-      }
-    }
-
-    const workspaceUrl = workspacePathUri.toString();
-
-    return {
-      type: 'remote',
-      name: dir,
-      remote: workspaceUrl
-    };
-  }
-
-  return {
-    type: 'error',
-    name: dir,
-    error: `No workspace folder or file URI in ${workspaceInfoFilePath}`
-  };
-}
-
-function sortWorkspaceInfoArray(first: WorkspaceInfo, second: WorkspaceInfo): number {
-  const firstValue = first.folder?.path ?? first.url ?? first.error ?? '';
-  const secondValue = second.folder?.path ?? second.url ?? second.error ?? '';
-
-  if (firstValue > secondValue) {
-    return 1;
-  }
-
-  if (firstValue < secondValue) {
-    return -1;
-  }
-
-  if (first.name > second.name) {
-    return 1;
-  }
-
-  if (first.name < second.name) {
-    return -1;
-  }
-
-  return 0;
-}
