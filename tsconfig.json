@@ -2,15 +2,11 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "target": "ES5",
+    "target": "ES6",
     "module": "CommonJS",
     "moduleResolution": "node",
-    "typeRoots": [
-      "node_modules/@types"
-    ],
-    "lib": [
-      "ESNext"
-    ],
+    "typeRoots": ["node_modules/@types"],
+    "lib": ["ESNext"],
     "allowSyntheticDefaultImports": true,
     "alwaysStrict": true,
     "declaration": false,
@@ -23,12 +19,11 @@
     "noUnusedParameters": true,
     "pretty": true,
     "removeComments": true,
-    "sourceMap": false,
+    "sourceMap": true,
     "strict": true,
     "strictBindCallApply": true,
     "strictNullChecks": true
   },
-  "include": [
-    "src/**/*"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", ".vscode-test"]
 }

@@ -10,8 +10,15 @@
         "--extensionDevelopmentPath=${workspaceFolder}",
         "--profile-temp"
       ],
-      "outFiles": ["${workspaceFolder}/**/*.js"],
-      "preLaunchTask": "${defaultBuildTask}"
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.js"
+      ],
+      "preLaunchTask": "${defaultBuildTask}",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/dist/**/*.js",
+        "${workspaceFolder}/**"
+      ]
     }
   ]
 }
