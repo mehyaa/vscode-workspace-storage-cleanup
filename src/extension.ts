@@ -1,10 +1,18 @@
-import { Dirent, existsSync } from 'fs';
+import { existsSync } from 'fs';
 
-import { readdir, readFile, rmdir, stat } from 'fs/promises';
+import { readdir, readFile, rmdir } from 'fs/promises';
 
 import { dirname, isAbsolute, join as pathJoin } from 'path';
 
-import { commands, env, window, ExtensionContext, Uri, ViewColumn, WebviewPanel } from 'vscode';
+import { commands, env, window, Uri, ViewColumn } from 'vscode';
+
+import { parse as jsonParse } from 'jsonc-parser';
+
+import { getDirSizeAsync, getNonce } from './utils';
+
+import type { ExtensionContext, WebviewPanel } from 'vscode';
+
+import type { ParseOptions } from 'jsonc-parser';
 
 type WorkspaceType = 'folder' | 'workspace' | 'error' | 'url' | 'remote';
 
@@ -60,7 +68,11 @@ type WebviewMessage =
       name: string;
     };
 
-const nonceCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const jsonParseOptions: ParseOptions = {
+  disallowComments: false,
+  allowTrailingComma: true,
+  allowEmptyContent: true
+};
 
 export function activate(context: ExtensionContext) {
   let currentPanel: WebviewPanel | undefined = undefined;
@@ -302,16 +314,6 @@ export function activate(context: ExtensionContext) {
 
 export function deactivate() {} // eslint-disable-line @typescript-eslint/no-empty-function
 
-function getNonce(): string {
-  const characters: Array<string> = [];
-
-  for (let i = 0; i < 32; i++) {
-    characters.push(nonceCharacters.charAt(Math.floor(Math.random() * nonceCharacters.length)));
-  }
-
-  return characters.join('');
-}
-
 async function getWorkspacesAsync(workspaceStorageRootPath: string): Promise<Array<WorkspaceInfo>> {
   const allItems = await readdir(workspaceStorageRootPath, { withFileTypes: true });
 
@@ -341,7 +343,7 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
 
   const workspaceMetaFileContent = await readFile(workspaceInfoFilePath, 'utf8');
 
-  const workspaceMeta = JSON.parse(workspaceMetaFileContent);
+  const workspaceMeta = jsonParse(workspaceMetaFileContent, [], jsonParseOptions);
 
   if (workspaceMeta.workspace) {
     const workspaceFileUri = Uri.parse(workspaceMeta.workspace);
@@ -360,7 +362,7 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
       if (workspaceFilePath) {
         const workspaceFileContent = await readFile(workspaceFilePath, 'utf8');
 
-        const workspace = JSON.parse(workspaceFileContent);
+        const workspace = jsonParse(workspaceFileContent, [], jsonParseOptions);
 
         const folders: Array<PathWithExists> = workspace.folders.map((folder: WorkspaceFolderInfo) => {
           if (isAbsolute(folder.path)) {
@@ -462,46 +464,4 @@ function sortWorkspaceInfoArray(first: WorkspaceInfo, second: WorkspaceInfo): nu
   }
 
   return 0;
-}
-
-async function getDirSizeAsync(dirPath: string): Promise<number> {
-  let totalSize = 0;
-
-  const stack: Array<string> = [dirPath];
-
-  while (stack.length > 0) {
-    const currentPath = stack.pop()!;
-
-    let entries: Array<Dirent>;
-
-    try {
-      entries = await readdir(currentPath, { withFileTypes: true });
-    } catch (err) {
-      window.showErrorMessage(`Error occured when reading '${currentPath}' (${err})`);
-
-      return 0;
-    }
-
-    const statPromises = entries.map(async entry => {
-      const entryPath = pathJoin(currentPath, entry.name);
-
-      if (entry.isFile()) {
-        try {
-          const stats = await stat(entryPath);
-
-          totalSize += stats.size;
-        } catch (err) {
-          window.showErrorMessage(`Error occured when getting file size of '${entryPath}' (${err})`);
-
-          return 0;
-        }
-      } else if (entry.isDirectory()) {
-        stack.push(entryPath);
-      }
-    });
-
-    await Promise.all(statPromises);
-  }
-
-  return totalSize;
 }
