@@ -199,11 +199,11 @@ export function activate(context: ExtensionContext) {
     context: ExtensionContext,
     handleWebviewMessage: (message: WebviewMessage) => Promise<void>
   ): Promise<void> {
-    if (currentPanel && !currentPanelDisposed) {
+    if (currentPanel) {
       currentPanel.reveal(ViewColumn.One, false);
     } else {
       currentPanel = window.createWebviewPanel(
-        'workspace-storage-cleanup.run',
+        'workspace-storage-cleanup',
         'Workspace Storage',
         {
           viewColumn: ViewColumn.One,
@@ -216,12 +216,13 @@ export function activate(context: ExtensionContext) {
         }
       );
 
-      context.subscriptions.push(currentPanel);
-
-      currentPanel.onDidDispose(() => {
-        currentPanel = undefined;
-        currentPanelDisposed = true;
-      });
+      currentPanel.onDidDispose(
+        () => {
+          currentPanel = undefined;
+        },
+        null,
+        context.subscriptions
+      );
 
       currentPanel.webview.onDidReceiveMessage(handleWebviewMessage);
 
