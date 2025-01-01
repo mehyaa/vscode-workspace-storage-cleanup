@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout files
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install Package Dependencies
         run: npm ci
@@ -50,33 +50,16 @@ jobs:
           registryUrl: https://marketplace.visualstudio.com
           extensionFile: "${{ steps.pack_extension.outputs.vsixPath }}"
 
-      - name: Create Draft Release
+      - name: Create Release
         if: github.event_name == 'push'
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: "Version ${{ env.PACKAGE_VERSION }}"
           tag_name: "v${{ env.PACKAGE_VERSION }}"
-          release_name: "Version ${{ env.PACKAGE_VERSION }}"
-          draft: true
+          generate_release_notes: true
+          draft: false
           prerelease: false
-
-      - name: Upload Extension File to Draft Release
-        if: github.event_name == 'push'
-        uses: actions/upload-release-asset@v1.0.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: "${{ steps.pack_extension.outputs.vsixPath }}"
-          asset_name: "${{ env.EXTENSION_FILENAME }}"
-          asset_content_type: application/zip
-
-      - name: Publish Draft Release
-        if: github.event_name == 'push'
-        uses: eregon/publish-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          release_id: ${{ steps.create_release.outputs.id }}
+          make_latest: true
+          files: |
+            ${{ steps.pack_extension.outputs.vsixPath }}
