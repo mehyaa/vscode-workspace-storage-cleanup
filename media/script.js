@@ -17,20 +17,28 @@ function humanFileSize(size) {
 }
 
 function onDelete(workspace) {
-  vscode.postMessage({
-    command: 'delete',
-    workspaces: [workspace]
-  });
+  try {
+    vscode.postMessage({
+      command: 'delete',
+      workspaces: [workspace]
+    });
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 function onDeleteSelected() {
-  const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"].check:checked');
-  const selectedWorkspaces = map.call(selectedCheckboxes, e => e.value);
+  try {
+    const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"].check:checked');
+    const selectedWorkspaces = map.call(selectedCheckboxes, e => e.value);
 
-  vscode.postMessage({
-    command: 'delete',
-    workspaces: selectedWorkspaces
-  });
+    vscode.postMessage({
+      command: 'delete',
+      workspaces: selectedWorkspaces
+    });
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 function setSelectedCheckboxCount(count) {
@@ -72,56 +80,80 @@ function onInvertSelection() {
 }
 
 function onRefresh() {
-  vscode.postMessage({
-    command: 'refresh'
-  });
+  try {
+    vscode.postMessage({
+      command: 'refresh'
+    });
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 function requestStorageSize(name, cellEl) {
-  vscode.postMessage({
-    command: 'get-storage-size',
-    name: name
-  });
+  try {
+    vscode.postMessage({
+      command: 'get-storage-size',
+      name: name
+    });
 
-  cellEl.innerHTML = spinnerSvg;
+    cellEl.innerHTML = spinnerSvg;
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 function requestWorkspaceSize(name, cellEl) {
-  vscode.postMessage({
-    command: 'get-workspace-size',
-    name: name
-  });
+  try {
+    vscode.postMessage({
+      command: 'get-workspace-size',
+      name: name
+    });
 
-  cellEl.innerHTML = spinnerSvg;
+    cellEl.innerHTML = spinnerSvg;
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 function requestAllStorageSizes() {
-  vscode.postMessage({
-    command: 'get-all-storage-sizes'
-  });
+  try {
+    vscode.postMessage({
+      command: 'get-all-storage-sizes'
+    });
 
-  document.querySelectorAll('table[id="workspaces"] td.storage-size').forEach(e => (e.innerHTML = spinnerSvg));
+    document.querySelectorAll('table[id="workspaces"] td.storage-size').forEach(e => (e.innerHTML = spinnerSvg));
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 function requestAllWorkspaceSizes() {
-  vscode.postMessage({
-    command: 'get-all-workspace-sizes'
-  });
+  try {
+    vscode.postMessage({
+      command: 'get-all-workspace-sizes'
+    });
 
-  document.querySelectorAll('table[id="workspaces"] td.workspace-size').forEach(e => {
-    const workspace = currentWorkspaces.find(w => w.name === e.parentElement.id);
+    document.querySelectorAll('table[id="workspaces"] td.workspace-size').forEach(e => {
+      const workspace = currentWorkspaces.find(w => w.name === e.parentElement.id);
 
-    if (workspace?.type === 'folder' || workspace?.type === 'workspace') {
-      e.innerHTML = spinnerSvg;
-    }
-  });
+      if (workspace?.type === 'folder' || workspace?.type === 'workspace') {
+        e.innerHTML = spinnerSvg;
+      }
+    });
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 function requestBrowseWorkspace(name) {
-  vscode.postMessage({
-    command: 'browse-workspace',
-    name: name
-  });
+  try {
+    vscode.postMessage({
+      command: 'browse-workspace',
+      name: name
+    });
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 let lastCheckedCheckbox = null;
@@ -130,6 +162,10 @@ function setWorkspaces(workspaces) {
   const table = document.querySelector('table[id="workspaces"]');
 
   const tbody = table.querySelector('tbody');
+
+  if (!tbody) {
+    return;
+  }
 
   tbody.innerHTML = '';
 
