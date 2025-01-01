@@ -25,15 +25,15 @@ type WebviewMessage =
     }
   | {
       command: 'delete';
-      workspaces: Array<string>;
+      workspaces?: Array<string>;
     }
   | {
       command: 'get-storage-size';
-      name: string;
+      name?: string;
     }
   | {
       command: 'get-workspace-size';
-      name: string;
+      name?: string;
     }
   | {
       command: 'get-all-storage-sizes';
@@ -43,12 +43,11 @@ type WebviewMessage =
     }
   | {
       command: 'browse-workspace';
-      name: string;
+      name?: string;
     };
 
 export function activate(context: ExtensionContext) {
   let currentPanel: WebviewPanel | undefined = undefined;
-  let currentPanelDisposed: boolean = false;
 
   let workspaces: Array<WorkspaceInfo> = [];
 
@@ -111,12 +110,22 @@ export function activate(context: ExtensionContext) {
 
         case 'get-storage-size':
           {
-            const workspaceStoragePath = pathJoin(workspaceStorageRootPath, message.name);
+            if (!message.name) {
+              return;
+            }
 
-            if (existsSync(workspaceStoragePath)) {
-              const storageSize = await getDirSizeAsync(workspaceStoragePath);
+            const workspace = workspaces.find(w => w.name === message.name);
 
-              postStorageSizeToWebview(message.name, storageSize);
+            if (workspace) {
+              try {
+                const workspaceStoragePath = pathJoin(workspaceStorageRootPath, workspace.name);
+
+                const storageSize = await getDirSizeAsync(workspaceStoragePath);
+
+                postStorageSizeToWebview(workspace.name, storageSize);
+              } catch (err) {
+                window.showErrorMessage(`Failed to get storage size for ${workspace.name}: ${(err as Error)?.message}`);
+              }
             }
           }
 
@@ -124,6 +133,10 @@ export function activate(context: ExtensionContext) {
 
         case 'get-workspace-size':
           {
+            if (!message.name) {
+              return;
+            }
+
             const workspace = workspaces.find(w => w.name === message.name);
 
             if (workspace) {
@@ -136,11 +149,15 @@ export function activate(context: ExtensionContext) {
         case 'get-all-storage-sizes':
           {
             for (const workspace of workspaces) {
-              const workspaceStoragePath = pathJoin(workspaceStorageRootPath, workspace.name);
+              try {
+                const workspaceStoragePath = pathJoin(workspaceStorageRootPath, workspace.name);
 
-              const storageSize = await getDirSizeAsync(workspaceStoragePath);
+                const storageSize = await getDirSizeAsync(workspaceStoragePath);
 
-              postStorageSizeToWebview(workspace.name, storageSize);
+                postStorageSizeToWebview(workspace.name, storageSize);
+              } catch (err) {
+                window.showErrorMessage(`Failed to get storage size for ${workspace.name}: ${(err as Error)?.message}`);
+              }
             }
           }
 
@@ -157,6 +174,10 @@ export function activate(context: ExtensionContext) {
 
         case 'browse-workspace':
           {
+            if (!message.name) {
+              return;
+            }
+
             const workspaceStoragePath = pathJoin(workspaceStorageRootPath, message.name);
 
             if (existsSync(workspaceStoragePath)) {
@@ -174,17 +195,32 @@ export function activate(context: ExtensionContext) {
 
     async function calculateAndWorkspaceSizeToWebviewAsync(workspace: WorkspaceInfo): Promise<void> {
       if (workspace.folder && existsSync(workspace.folder.path)) {
-        const workspaceSize = await getDirSizeAsync(workspace.folder.path);
-
-        postWorkspaceSizeToWebview(workspace.name, workspaceSize);
+        try {
+          const workspaceSize = await getDirSizeAsync(workspace.folder.path);
+          postWorkspaceSizeToWebview(workspace.name, workspaceSize);
+        } catch (err) {
+          window.showErrorMessage(
+            `Failed to get size of folder ${workspace.folder.path} for workspace ${workspace.name}: ${
+              (err as Error)?.message
+            }`
+          );
+        }
       } else if (workspace.workspace && workspace.workspace.folders.length > 0) {
         const workspaceSizes: Array<PathWithSize> = await Promise.all(
           workspace.workspace.folders
             .filter(folder => existsSync(folder.path))
             .map(async folder => {
-              const size = await getDirSizeAsync(folder.path);
-
-              return { path: folder.path, size };
+              try {
+                const size = await getDirSizeAsync(folder.path);
+                return { path: folder.path, size };
+              } catch (err) {
+                window.showErrorMessage(
+                  `Failed to get size of folder ${folder.path} for workspace ${workspace.name}: ${
+                    (err as Error)?.message
+                  }`
+                );
+                return { path: folder.path, size: 0 };
+              }
             })
         );
 
@@ -200,48 +236,56 @@ export function activate(context: ExtensionContext) {
     handleWebviewMessage: (message: WebviewMessage) => Promise<void>
   ): Promise<void> {
     if (currentPanel) {
-      currentPanel.reveal(ViewColumn.One, false);
+      try {
+        currentPanel.reveal(ViewColumn.One, false);
+      } catch (err) {
+        window.showErrorMessage(`Failed to reveal webview panel: ${(err as Error)?.message}`);
+      }
     } else {
-      currentPanel = window.createWebviewPanel(
-        'workspace-storage-cleanup',
-        'Workspace Storage',
-        {
-          viewColumn: ViewColumn.One,
-          preserveFocus: false
-        },
-        {
-          enableScripts: true,
-          localResourceRoots: [Uri.file(pathJoin(context.extensionPath, 'media'))],
-          retainContextWhenHidden: true
-        }
-      );
+      try {
+        currentPanel = window.createWebviewPanel(
+          'workspace-storage-cleanup',
+          'Workspace Storage',
+          {
+            viewColumn: ViewColumn.One,
+            preserveFocus: false
+          },
+          {
+            enableScripts: true,
+            localResourceRoots: [Uri.file(pathJoin(context.extensionPath, 'media'))],
+            retainContextWhenHidden: true
+          }
+        );
 
-      currentPanel.onDidDispose(
-        () => {
-          currentPanel = undefined;
-        },
-        null,
-        context.subscriptions
-      );
+        currentPanel.onDidDispose(
+          () => {
+            currentPanel = undefined;
+          },
+          null,
+          context.subscriptions
+        );
 
-      currentPanel.webview.onDidReceiveMessage(handleWebviewMessage);
+        currentPanel.webview.onDidReceiveMessage(handleWebviewMessage);
 
-      const htmlPath = pathJoin(context.extensionPath, 'media', 'webview.html');
+        const htmlPath = pathJoin(context.extensionPath, 'media', 'webview.html');
 
-      const html = await readFile(htmlPath, 'utf8');
+        const html = await readFile(htmlPath, 'utf8');
 
-      const stylePath = pathJoin(context.extensionPath, 'media', 'style.css');
-      const scriptPath = pathJoin(context.extensionPath, 'media', 'script.js');
+        const stylePath = pathJoin(context.extensionPath, 'media', 'style.css');
+        const scriptPath = pathJoin(context.extensionPath, 'media', 'script.js');
 
-      const styleUri = currentPanel.webview.asWebviewUri(Uri.file(stylePath));
-      const scriptUri = currentPanel.webview.asWebviewUri(Uri.file(scriptPath));
+        const styleUri = currentPanel.webview.asWebviewUri(Uri.file(stylePath));
+        const scriptUri = currentPanel.webview.asWebviewUri(Uri.file(scriptPath));
 
-      setWebviewInitialContent(html, scriptUri, styleUri);
+        setWebviewInitialContent(html, scriptUri, styleUri);
+      } catch (err) {
+        window.showErrorMessage(`Failed to initialize webview: ${(err as Error)?.message}`);
+      }
     }
   }
 
   function setWebviewInitialContent(html: string, scriptUri: Uri, styleUri: Uri): void {
-    if (currentPanel && !currentPanelDisposed) {
+    if (currentPanel) {
       const nonce = getNonce(); // Content Security Policy (CSP)
 
       currentPanel.webview.html = html
@@ -261,26 +305,42 @@ export function activate(context: ExtensionContext) {
   }
 
   async function postWorkspacesToWebview(workspaces: Array<WorkspaceInfo>): Promise<void> {
-    if (currentPanel && !currentPanelDisposed) {
-      currentPanel.webview.postMessage({ command: 'set-workspaces', workspaces });
+    if (currentPanel) {
+      try {
+        currentPanel.webview.postMessage({ command: 'set-workspaces', workspaces });
+      } catch (err) {
+        window.showErrorMessage(`Failed to post workspaces to webview: ${(err as Error)?.message}`);
+      }
     }
   }
 
   function postStorageSizeToWebview(name: string, size: number): void {
-    if (currentPanel && !currentPanelDisposed) {
-      currentPanel.webview.postMessage({ command: 'set-storage-size', name, size });
+    if (currentPanel) {
+      try {
+        currentPanel.webview.postMessage({ command: 'set-storage-size', name, size });
+      } catch (err) {
+        window.showErrorMessage(`Failed to post storage size to webview: ${(err as Error)?.message}`);
+      }
     }
   }
 
   function postWorkspaceSizeToWebview(name: string, size: number): void {
-    if (currentPanel && !currentPanelDisposed) {
-      currentPanel.webview.postMessage({ command: 'set-workspace-size', name, size });
+    if (currentPanel) {
+      try {
+        currentPanel.webview.postMessage({ command: 'set-workspace-size', name, size });
+      } catch (err) {
+        window.showErrorMessage(`Failed to post workspace size to webview: ${(err as Error)?.message}`);
+      }
     }
   }
 
   function postWorkspaceSizesToWebview(name: string, sizes: Array<PathWithSize>): void {
-    if (currentPanel && !currentPanelDisposed) {
-      currentPanel.webview.postMessage({ command: 'set-workspace-sizes', name, sizes });
+    if (currentPanel) {
+      try {
+        currentPanel.webview.postMessage({ command: 'set-workspace-sizes', name, sizes });
+      } catch (err) {
+        window.showErrorMessage(`Failed to post workspace sizes to webview: ${(err as Error)?.message}`);
+      }
     }
   }
 }

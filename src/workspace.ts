@@ -8,7 +8,7 @@ import { Uri } from 'vscode';
 
 import { parse as jsonParse } from 'jsonc-parser';
 
-import { sortWorkspaceInfoArray } from './utils';
+import { compareWorkspaceInfo } from './utils';
 
 import type { ParseOptions } from 'jsonc-parser';
 
@@ -70,7 +70,7 @@ export async function getWorkspacesAsync(workspaceStorageRootPath: string): Prom
     directories.map(dir => getWorkspaceInfoAsync(workspaceStorageRootPath, dir))
   );
 
-  workspaces.sort(sortWorkspaceInfoArray);
+  workspaces.sort(compareWorkspaceInfo);
 
   return workspaces;
 }

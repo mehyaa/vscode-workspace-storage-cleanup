@@ -1,7 +1,7 @@
 {
   "name": "workspace-storage-cleanup",
   "displayName": "Workspace Storage Cleanup",
-  "version": "1.7.5",
+  "version": "1.7.7",
   "description": "Remove workspace storage folders which are linked to non-existent folders",
   "icon": "img/icon.png",
   "publisher": "mehyaa",
