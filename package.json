@@ -1,7 +1,7 @@
 {
   "name": "workspace-storage-cleanup",
   "displayName": "Workspace Storage Cleanup",
-  "version": "1.7.7",
+  "version": "1.8.0",
   "description": "Remove workspace storage folders which are linked to non-existent folders",
   "icon": "img/icon.png",
   "publisher": "mehyaa",
@@ -27,8 +27,24 @@
   "contributes": {
     "commands": [
       {
-        "command": "workspace-storage-cleanup.run",
-        "title": "Workspaces: Cleanup Storage"
+        "command": "workspace-storage-cleanup.show",
+        "title": "Workspace Storage Cleanup: Show Workspaces"
+      },
+      {
+        "command": "workspace-storage-cleanup.run-folder-missing",
+        "title": "Workspace Storage Cleanup: Delete Workspaces with Missing Folders"
+      },
+      {
+        "command": "workspace-storage-cleanup.run-broken",
+        "title": "Workspace Storage Cleanup: Delete Workspaces with Broken Links"
+      },
+      {
+        "command": "workspace-storage-cleanup.run-empty",
+        "title": "Workspace Storage Cleanup: Delete Empty Workspaces"
+      },
+      {
+        "command": "workspace-storage-cleanup.run-remote",
+        "title": "Workspace Storage Cleanup: Delete Remote Workspaces"
       }
     ]
   },

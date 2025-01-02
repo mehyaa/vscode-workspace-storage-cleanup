@@ -51,11 +51,7 @@ export function activate(context: ExtensionContext) {
 
   let workspaces: Array<WorkspaceInfo> = [];
 
-  context.subscriptions.push(
-    commands.registerCommand('workspace-storage-cleanup.run', () => showWorkspacePanelAsync(context))
-  );
-
-  async function showWorkspacePanelAsync(context: ExtensionContext): Promise<void> {
+  function getWorkspaceStorageRootPath(context: ExtensionContext): string | undefined {
     const globalStoragePath = dirname(context.globalStorageUri.fsPath);
 
     if (!globalStoragePath) {
@@ -66,13 +62,70 @@ export function activate(context: ExtensionContext) {
 
     const vscodeProfilePath = dirname(globalStoragePath);
 
-    const workspaceStorageRootPath = pathJoin(vscodeProfilePath, 'workspaceStorage');
+    return pathJoin(vscodeProfilePath, 'workspaceStorage');
+  }
+
+  async function removeMatchingWorkspaces(
+    context: ExtensionContext,
+    predicate: (w: WorkspaceInfo) => boolean | undefined
+  ) {
+    const workspaceStorageRootPath = getWorkspaceStorageRootPath(context);
+
+    if (!workspaceStorageRootPath) {
+      return;
+    }
+
+    workspaces = await getWorkspacesAsync(workspaceStorageRootPath);
+
+    for (const workspace of workspaces) {
+      if (predicate(workspace)) {
+        try {
+          await rmdir(pathJoin(workspaceStorageRootPath, workspace.name), { recursive: true });
+        } catch (err) {
+          window.showErrorMessage(`Failed to remove workspace folder ${workspace.name}: ${(err as Error)?.message}`);
+        }
+      }
+    }
+
+    if (currentPanel) {
+      workspaces = await getWorkspacesAsync(workspaceStorageRootPath);
+
+      await postWorkspacesToWebview(workspaces);
+    }
+  }
+
+  context.subscriptions.push(
+    commands.registerCommand('workspace-storage-cleanup.show', () => showWorkspacePanelAsync(context)),
+
+    commands.registerCommand('workspace-storage-cleanup.run-folder-missing', () =>
+      removeMatchingWorkspaces(context, w => w.folder && !w.folder.exists)
+    ),
+
+    commands.registerCommand('workspace-storage-cleanup.run-broken', () =>
+      removeMatchingWorkspaces(context, w => w.type === 'error')
+    ),
+
+    commands.registerCommand('workspace-storage-cleanup.run-empty', () =>
+      removeMatchingWorkspaces(context, w => w.workspace && w.workspace.folders.length === 0)
+    ),
+
+    commands.registerCommand('workspace-storage-cleanup.run-remote', () =>
+      removeMatchingWorkspaces(context, w => w.type === 'remote')
+    )
+  );
+
+  async function showWorkspacePanelAsync(context: ExtensionContext): Promise<void> {
+    const workspaceStorageRootPath = getWorkspaceStorageRootPath(context);
+
+    if (!workspaceStorageRootPath) {
+      return;
+    }
 
     async function handleWebviewMessage(message: WebviewMessage): Promise<void> {
       switch (message.command) {
         case 'refresh':
           {
-            workspaces = await getWorkspacesAsync(workspaceStorageRootPath);
+            workspaces = await getWorkspacesAsync(workspaceStorageRootPath!);
 
             await postWorkspacesToWebview(workspaces);
           }
@@ -84,7 +137,7 @@ export function activate(context: ExtensionContext) {
             const errorMessages: Array<string> = [];
 
             for (const workspace of message.workspaces) {
-              const dirPath = pathJoin(workspaceStorageRootPath, workspace);
+              const dirPath = pathJoin(workspaceStorageRootPath!, workspace);
 
               try {
                 await rmdir(dirPath, { recursive: true });
@@ -101,7 +154,7 @@ export function activate(context: ExtensionContext) {
               window.showErrorMessage(errorMessages.join('\n'));
             }
 
-            workspaces = await getWorkspacesAsync(workspaceStorageRootPath);
+            workspaces = await getWorkspacesAsync(workspaceStorageRootPath!);
 
             await postWorkspacesToWebview(workspaces);
           }
@@ -118,7 +171,7 @@ export function activate(context: ExtensionContext) {
 
             if (workspace) {
               try {
-                const workspaceStoragePath = pathJoin(workspaceStorageRootPath, workspace.name);
+                const workspaceStoragePath = pathJoin(workspaceStorageRootPath!, workspace.name);
 
                 const storageSize = await getDirSizeAsync(workspaceStoragePath);
 
@@ -150,7 +203,7 @@ export function activate(context: ExtensionContext) {
           {
             for (const workspace of workspaces) {
               try {
-                const workspaceStoragePath = pathJoin(workspaceStorageRootPath, workspace.name);
+                const workspaceStoragePath = pathJoin(workspaceStorageRootPath!, workspace.name);
 
                 const storageSize = await getDirSizeAsync(workspaceStoragePath);
 
@@ -178,7 +231,7 @@ export function activate(context: ExtensionContext) {
               return;
             }
 
-            const workspaceStoragePath = pathJoin(workspaceStorageRootPath, message.name);
+            const workspaceStoragePath = pathJoin(workspaceStorageRootPath!, message.name);
 
             if (existsSync(workspaceStoragePath)) {
               const success = env.openExternal(Uri.file(workspaceStoragePath));
