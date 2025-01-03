@@ -109,9 +109,18 @@ export function activate(context: ExtensionContext) {
       switch (message.command) {
         case 'refresh':
           {
-            workspaces = await getWorkspacesAsync(workspaceStorageRootPath!);
+            await window.withProgress(
+              {
+                location: ProgressLocation.Notification,
+                title: 'Collecting workspaces...',
+                cancellable: false
+              },
+              async () => {
+                workspaces = await getWorkspacesAsync(workspaceStorageRootPath!);
 
-            await postWorkspacesToWebview(workspaces);
+                await postWorkspacesToWebview(workspaces);
+              }
+            );
           }
 
           break;

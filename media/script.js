@@ -499,6 +499,8 @@ function setWorkspaces(workspaces) {
     tbody.appendChild(tr);
   }
 
+  document.querySelectorAll('span.workspace-count').forEach(e => (e.textContent = workspaces.length));
+
   const loading = document.getElementById('loading');
 
   if (loading) {
@@ -510,8 +512,6 @@ function setWorkspaces(workspaces) {
   if (content) {
     content.style.display = 'block';
   }
-
-  document.querySelectorAll('span.workspace-count').forEach(e => (e.textContent = workspaces.length));
 }
 
 function setStorageSizeOnTable(name, size) {
