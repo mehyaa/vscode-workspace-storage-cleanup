@@ -27,6 +27,7 @@ type WorkspaceFile = {
 type WorkspaceFolder = {
   name?: string;
   path?: string;
+  uri?: string;
 };
 
 export type WorkspaceInfo = {
@@ -113,28 +114,50 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
           return {
             type: 'error',
             name: dir,
-            error: `No folders in workspace file ${workspaceFileUri.fsPath}`
+            error: `No folders key exists in workspace file ${workspaceFileUri.fsPath}`
           };
         }
 
         const folders: Array<PathWithExists> = workspaceFile.folders.map((folder: WorkspaceFolder) => {
-          if (!folder?.path) {
-            return <PathWithExists>{ path: 'No path exists', exists: false };
-          }
+          if (folder?.path) {
+            if (isAbsolute(folder.path)) {
+              return <PathWithExists>{
+                path: folder.path,
+                exists: existsSync(folder.path)
+              };
+            }
 
-          if (isAbsolute(folder.path)) {
+            const workspaceFolderPath = pathJoin(dirname(workspaceFileUri.fsPath), folder.path);
+
             return <PathWithExists>{
-              path: folder.path,
-              exists: existsSync(folder.path)
+              path: workspaceFolderPath,
+              exists: existsSync(workspaceFolderPath)
             };
           }
 
-          const workspaceFolderPath = pathJoin(dirname(workspaceFileUri.fsPath), folder.path);
+          if (folder?.uri) {
+            const pathUri = Uri.parse(folder.uri);
 
-          return <PathWithExists>{
-            path: workspaceFolderPath,
-            exists: existsSync(workspaceFolderPath)
-          };
+            if (pathUri.scheme === 'file') {
+              if (isAbsolute(pathUri.fsPath)) {
+                return <PathWithExists>{
+                  path: pathUri.fsPath,
+                  exists: existsSync(pathUri.fsPath)
+                };
+              }
+
+              const workspaceFolderPath = pathJoin(dirname(workspaceFileUri.fsPath), pathUri.fsPath);
+
+              return <PathWithExists>{
+                path: workspaceFolderPath,
+                exists: existsSync(workspaceFolderPath)
+              };
+            }
+
+            return <PathWithExists>{ path: `No path exists but found a non-file uri: ${folder?.uri}`, exists: false };
+          }
+
+          return <PathWithExists>{ path: 'No path or uri exists for folder', exists: false };
         });
 
         return {
