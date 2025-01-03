@@ -207,7 +207,7 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
     return {
       type: 'error',
       name: dir,
-      error: `Error occured when processing forder ${dir} in ${workspaceStorageRootPath}: ${err}`
+      error: `Error occurred when processing folder ${dir} in ${workspaceStorageRootPath}: ${err}`
     };
   }
 }

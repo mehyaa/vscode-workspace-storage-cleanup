@@ -421,7 +421,7 @@ function setWorkspaces(workspaces) {
     const aDelete = document.createElement('a');
     aDelete.href = 'javascript:';
     aDelete.textContent = 'Delete';
-    aDelete.title = 'Delete workspace';
+    aDelete.title = 'Delete workspace storage';
     aDelete.addEventListener('click', event => {
       event.stopPropagation();
 

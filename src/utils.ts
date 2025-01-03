@@ -21,7 +21,7 @@ export async function getDirSizeAsync(dirPath: string): Promise<number> {
     try {
       entries = await readdir(currentPath, { withFileTypes: true });
     } catch (err) {
-      window.showErrorMessage(`Error occured when reading '${currentPath}' (${err})`);
+      window.showErrorMessage(`Error occurred when reading '${currentPath}' (${err})`);
 
       return 0;
     }
@@ -35,7 +35,7 @@ export async function getDirSizeAsync(dirPath: string): Promise<number> {
 
           totalSize += stats.size;
         } catch (err) {
-          window.showErrorMessage(`Error occured when getting file size of '${entryPath}' (${err})`);
+          window.showErrorMessage(`Error occurred when getting file size of '${entryPath}' (${err})`);
 
           return 0;
         }
