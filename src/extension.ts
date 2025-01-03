@@ -336,9 +336,10 @@ export function activate(context: ExtensionContext) {
             preserveFocus: false
           },
           {
-            enableScripts: true,
             localResourceRoots: [Uri.file(pathJoin(context.extensionPath, 'media'))],
-            retainContextWhenHidden: true
+            retainContextWhenHidden: true,
+            enableScripts: true,
+            enableFindWidget: true
           }
         );
 
