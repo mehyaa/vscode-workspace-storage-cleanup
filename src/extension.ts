@@ -82,7 +82,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand('workspace-storage-cleanup.show', () => showWorkspacePanelAsync(context)),
 
     commands.registerCommand('workspace-storage-cleanup.run-folder-missing', () =>
-      removeMatchingWorkspaces(w => w.folder && !w.folder.exists, 'Removing workspaces with missing folders...')
+      removeMatchingWorkspaces(
+        w => w.type === 'folder' && 'path' in w.folder && !w.folder.exists,
+        'Removing workspaces with missing folders...'
+      )
     ),
 
     commands.registerCommand('workspace-storage-cleanup.run-broken', () =>
@@ -91,7 +94,7 @@ export function activate(context: ExtensionContext) {
 
     commands.registerCommand('workspace-storage-cleanup.run-empty', () =>
       removeMatchingWorkspaces(
-        w => w.workspace && w.workspace.folders.length === 0,
+        w => w.type === 'workspace' && w.workspace.folders.length === 0,
         'Removing workspaces with empty folders...'
       )
     ),
@@ -262,7 +265,7 @@ export function activate(context: ExtensionContext) {
     }
 
     async function calculateAndWorkspaceSizeToWebviewAsync(workspace: WorkspaceInfo): Promise<void> {
-      if (workspace.folder && existsSync(workspace.folder.path)) {
+      if ('folder' in workspace && 'path' in workspace.folder && workspace.folder.exists) {
         try {
           const workspaceSize = await getDirSizeAsync(workspace.folder.path);
           postWorkspaceSizeToWebview(workspace.name, workspaceSize);
@@ -273,21 +276,26 @@ export function activate(context: ExtensionContext) {
             }`
           );
         }
-      } else if (workspace.workspace && workspace.workspace.folders.length > 0) {
+      } else if ('workspace' in workspace && workspace.workspace.folders.length > 0) {
         const workspaceSizes: Array<PathWithSize> = await Promise.all(
           workspace.workspace.folders
-            .filter(folder => existsSync(folder.path))
+            .filter(folder => 'path' in folder && folder.exists)
             .map(async folder => {
               try {
+                if (!('path' in folder)) {
+                  throw new Error('Folder path is missing');
+                }
+
                 const size = await getDirSizeAsync(folder.path);
                 return { path: folder.path, size };
               } catch (err) {
+                const path = 'path' in folder ? folder.path : 'unknown';
+
                 window.showErrorMessage(
-                  `Failed to get size of folder ${folder.path} for workspace ${workspace.name}: ${
-                    (err as Error)?.message
-                  }`
+                  `Failed to get size of folder ${path} for workspace ${workspace.name}: ${(err as Error)?.message}`
                 );
-                return { path: folder.path, size: 0 };
+
+                return { path, size: 0 };
               }
             })
         );

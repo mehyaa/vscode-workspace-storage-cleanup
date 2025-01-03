@@ -15,39 +15,67 @@ import type { ParseOptions } from 'jsonc-parser';
 export type WorkspaceType = 'error' | 'folder' | 'remote' | 'workspace';
 export type RemoteWorkspaceType = 'dev-container' | 'github' | 'github-codespaces' | 'ssh' | 'wsl';
 
-type WorkspaceStorage = {
-  folder?: string;
-  workspace?: string;
-};
+type WorkspaceStorage =
+  | {}
+  | {
+      folder: string;
+    }
+  | {
+      workspace: string;
+    };
 
 type WorkspaceFile = {
   folders?: Array<WorkspaceFolder>;
 };
 
+type PathOrUri =
+  | {
+      path: string;
+    }
+  | {
+      uri: string;
+    };
+
 type WorkspaceFolder = {
   name?: string;
-  path?: string;
-  uri?: string;
-};
+} & PathOrUri;
+
+export type WorkspaceFolderInfo =
+  | {
+      path: string;
+      exists: boolean;
+    }
+  | {
+      error: string;
+    };
+
+type WorkspaceTargetInfo =
+  | {
+      type: 'folder';
+      folder: WorkspaceFolderInfo;
+    }
+  | {
+      type: 'workspace';
+      workspace: WorkspaceFileInfo;
+    }
+  | {
+      type: 'remote';
+      remote: RemoteWorkspaceInfo;
+    }
+  | {
+      type: 'error';
+      error: string;
+    };
 
 export type WorkspaceInfo = {
   type: WorkspaceType;
   name: string;
-  folder?: PathWithExists;
-  workspace?: WorkspaceFileInfo;
-  remote?: RemoteWorkspaceInfo;
-  error?: string;
-};
+} & WorkspaceTargetInfo;
 
 export type WorkspaceFileInfo = {
   path: string;
   exists: boolean;
-  folders: Array<PathWithExists>;
-};
-
-export type PathWithExists = {
-  path: string;
-  exists: boolean;
+  folders: Array<WorkspaceFolderInfo>;
 };
 
 export type RemoteWorkspaceInfo = {
@@ -94,7 +122,7 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
 
     const workspaceStorage = jsonParse(workspaceStorageFileContent, [], jsonParseOptions) as WorkspaceStorage;
 
-    if (workspaceStorage.workspace) {
+    if ('workspace' in workspaceStorage) {
       const workspaceFileUri = Uri.parse(workspaceStorage.workspace);
 
       if (!workspaceFileUri) {
@@ -118,10 +146,10 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
           };
         }
 
-        const folders: Array<PathWithExists> = workspaceFile.folders.map((folder: WorkspaceFolder) => {
-          if (folder?.path) {
+        const folders: Array<WorkspaceFolderInfo> = workspaceFile.folders.map((folder: WorkspaceFolder) => {
+          if ('path' in folder) {
             if (isAbsolute(folder.path)) {
-              return <PathWithExists>{
+              return <WorkspaceFolderInfo>{
                 path: folder.path,
                 exists: existsSync(folder.path)
               };
@@ -129,18 +157,18 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
 
             const workspaceFolderPath = pathJoin(dirname(workspaceFileUri.fsPath), folder.path);
 
-            return <PathWithExists>{
+            return <WorkspaceFolderInfo>{
               path: workspaceFolderPath,
               exists: existsSync(workspaceFolderPath)
             };
           }
 
-          if (folder?.uri) {
+          if ('uri' in folder) {
             const pathUri = Uri.parse(folder.uri);
 
             if (pathUri.scheme === 'file') {
               if (isAbsolute(pathUri.fsPath)) {
-                return <PathWithExists>{
+                return <WorkspaceFolderInfo>{
                   path: pathUri.fsPath,
                   exists: existsSync(pathUri.fsPath)
                 };
@@ -148,16 +176,20 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
 
               const workspaceFolderPath = pathJoin(dirname(workspaceFileUri.fsPath), pathUri.fsPath);
 
-              return <PathWithExists>{
+              return <WorkspaceFolderInfo>{
                 path: workspaceFolderPath,
                 exists: existsSync(workspaceFolderPath)
               };
             }
 
-            return <PathWithExists>{ path: `No path exists but found a non-file uri: ${folder?.uri}`, exists: false };
+            return <WorkspaceFolderInfo>{
+              error: `No path exists but found a non-file uri: ${folder?.uri}`
+            };
           }
 
-          return <PathWithExists>{ path: 'No path or uri exists for folder', exists: false };
+          return <WorkspaceFolderInfo>{
+            error: 'No path or uri exists for folder'
+          };
         });
 
         return {
@@ -178,7 +210,7 @@ async function getWorkspaceInfoAsync(workspaceStorageRootPath: string, dir: stri
       };
     }
 
-    if (workspaceStorage.folder) {
+    if ('folder' in workspaceStorage) {
       const workspacePathUri = Uri.parse(workspaceStorage.folder);
 
       if (!workspacePathUri) {

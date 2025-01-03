@@ -78,30 +78,31 @@ function getWorkspaceInfoCompareValue(workspace: WorkspaceInfo): string {
       return `0error-${workspace.error!}`;
 
     case 'folder':
-      return `1folder-${workspace.folder!.path}`;
+      if ('error' in workspace.folder) {
+        return `0error-${workspace.folder.error}`;
+      }
+
+      return `1folder-${workspace.folder.path}`;
 
     case 'remote':
-      switch (workspace.remote!.type) {
+      switch (workspace.remote.type) {
         case 'dev-container':
-          return `3remote-dev-container-${workspace.remote!.path}`;
+          return `3remote-dev-container-${workspace.remote.path}`;
 
         case 'github':
-          return `4remote-github-${workspace.remote!.path}`;
+          return `4remote-github-${workspace.remote.path}`;
 
         case 'github-codespaces':
-          return `5remote-github-codespaces-${workspace.remote!.path}`;
+          return `5remote-github-codespaces-${workspace.remote.path}`;
 
         case 'ssh':
-          return `6remote-ssh-${workspace.remote!.path}`;
+          return `6remote-ssh-${workspace.remote.path}`;
 
         case 'wsl':
-          return `7remote-wsl-${workspace.remote!.path}`;
+          return `7remote-wsl-${workspace.remote.path}`;
       }
 
     case 'workspace':
-      return `2workspace-${workspace.workspace!.path}`;
-
-    default:
-      return `000-${workspace.name}`;
+      return `2workspace-${workspace.workspace.path}`;
   }
 }

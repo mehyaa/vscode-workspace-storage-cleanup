@@ -354,21 +354,28 @@ function fillWorkspacePathCell(workspace, td, classes) {
       const spanPath = document.createElement('span');
       spanPath.className = 'path';
 
-      const aFolder = document.createElement('a');
-      aFolder.href = 'javascript:';
+      if (folder.error) {
+        spanPath.textContent = folder.error;
+      } else if (folder.path) {
+        const aFolder = document.createElement('a');
+        aFolder.href = 'javascript:';
 
-      if (folder.exists) {
-        aFolder.textContent = folder.path;
+        if (folder.exists) {
+          aFolder.textContent = folder.path;
+        } else {
+          aFolder.textContent = `${folder.path} ⛓️‍💥`;
+        }
+
+        aFolder.addEventListener('click', event => {
+          event.stopPropagation();
+          requestBrowseFolder(folder.path);
+        });
+
+        spanPath.appendChild(aFolder);
       } else {
-        aFolder.textContent = `${folder.path} ⛓️‍💥`;
+        spanPath.textContent = 'Folder path not found in workspace.json';
       }
 
-      aFolder.addEventListener('click', event => {
-        event.stopPropagation();
-        requestBrowseFolder(folder.path);
-      });
-
-      spanPath.appendChild(aFolder);
       divFolder.appendChild(spanPath);
 
       const spanSize = document.createElement('span');
