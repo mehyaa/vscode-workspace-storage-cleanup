@@ -16,29 +16,21 @@ function humanFileSize(size) {
   return `${(size / Math.pow(1024, i)).toFixed(2)} ${['B', 'kB', 'MB', 'GB', 'TB'][i]}`;
 }
 
-function onDelete(workspace) {
+function postVsCodeMessage(command, payload) {
   try {
-    vscode.postMessage({
-      command: 'delete',
-      workspaces: [workspace]
-    });
+    vscode.postMessage({ command, ...payload });
   } catch (err) {
     console.error(err);
   }
 }
 
-function onDeleteSelected() {
-  try {
-    const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"].check:checked');
-    const selectedWorkspaces = map.call(selectedCheckboxes, e => e.value);
+function onDelete(workspace) {
+  postVsCodeMessage('delete', { workspaces: [workspace] });
+}
 
-    vscode.postMessage({
-      command: 'delete',
-      workspaces: selectedWorkspaces
-    });
-  } catch (err) {
-    console.error(err);
-  }
+function onDeleteSelected() {
+  const selectedWorkspaces = map.call(document.querySelectorAll('input[type="checkbox"].check:checked'), e => e.value);
+  postVsCodeMessage('delete', { workspaces: selectedWorkspaces });
 }
 
 function setSelectedCheckboxCount(count) {
@@ -80,83 +72,398 @@ function onInvertSelection() {
 }
 
 function onRefresh() {
-  try {
-    vscode.postMessage({
-      command: 'refresh'
-    });
-  } catch (err) {
-    console.error(err);
-  }
+  postVsCodeMessage('refresh', {});
 }
 
 function requestStorageSize(name, cellEl) {
-  try {
-    vscode.postMessage({
-      command: 'get-storage-size',
-      name: name
-    });
-
-    cellEl.innerHTML = spinnerSvg;
-  } catch (err) {
-    console.error(err);
-  }
+  postVsCodeMessage('get-storage-size', { name });
+  cellEl.innerHTML = spinnerSvg;
 }
 
 function requestWorkspaceSize(name, cellEl) {
-  try {
-    vscode.postMessage({
-      command: 'get-workspace-size',
-      name: name
-    });
-
-    cellEl.innerHTML = spinnerSvg;
-  } catch (err) {
-    console.error(err);
-  }
+  postVsCodeMessage('get-workspace-size', { name });
+  cellEl.innerHTML = spinnerSvg;
 }
 
 function requestAllStorageSizes() {
-  try {
-    vscode.postMessage({
-      command: 'get-all-storage-sizes'
-    });
-
-    document.querySelectorAll('table[id="workspaces"] td.storage-size').forEach(e => (e.innerHTML = spinnerSvg));
-  } catch (err) {
-    console.error(err);
-  }
+  postVsCodeMessage('get-all-storage-sizes', {});
+  document.querySelectorAll('table[id="workspaces"] td.storage-size').forEach(e => (e.innerHTML = spinnerSvg));
 }
 
 function requestAllWorkspaceSizes() {
-  try {
-    vscode.postMessage({
-      command: 'get-all-workspace-sizes'
-    });
+  postVsCodeMessage('get-all-workspace-sizes', {});
 
-    document.querySelectorAll('table[id="workspaces"] td.workspace-size').forEach(e => {
-      const workspace = currentWorkspaces.find(w => w.name === e.parentElement.id);
+  document.querySelectorAll('table[id="workspaces"] td.workspace-size').forEach(e => {
+    const workspace = currentWorkspaces.find(w => w.name === e.parentElement.id);
 
-      if (workspace?.type === 'folder' || workspace?.type === 'workspace') {
-        e.innerHTML = spinnerSvg;
-      }
-    });
-  } catch (err) {
-    console.error(err);
-  }
+    if (!workspace) {
+      return;
+    }
+
+    if (workspace.type === 'folder' || (workspace.type === 'workspace' && workspace.workspace?.folders?.length > 0)) {
+      e.innerHTML = spinnerSvg;
+    }
+  });
 }
 
-function requestBrowseWorkspace(name) {
-  try {
-    vscode.postMessage({
-      command: 'browse-workspace',
-      name: name
-    });
-  } catch (err) {
-    console.error(err);
-  }
+function requestBrowseWorkspaceStorage(name) {
+  postVsCodeMessage('browse-folder', { name });
+}
+
+function requestBrowseFolder(path) {
+  postVsCodeMessage('browse-folder', { path });
+}
+
+function requestOpenFile(path) {
+  postVsCodeMessage('open-file', { path });
 }
 
 let lastCheckedCheckbox = null;
+
+function createCheckboxCell(workspace) {
+  const td = document.createElement('td');
+  td.className = 'checkbox';
+
+  function handleCheckboxClick(checkbox, shiftKey) {
+    if (!lastCheckedCheckbox) {
+      lastCheckedCheckbox = checkbox;
+      return;
+    }
+
+    if (shiftKey) {
+      const rowCheckboxes = document.querySelectorAll('input[type="checkbox"].check');
+
+      let start = indexOf.call(rowCheckboxes, checkbox);
+      let end = indexOf.call(rowCheckboxes, lastCheckedCheckbox);
+
+      if (start > end) {
+        [start, end] = [end, start];
+      }
+
+      for (let i = start; i <= end; i++) {
+        rowCheckboxes[i].checked = lastCheckedCheckbox.checked;
+      }
+    }
+
+    lastCheckedCheckbox = checkbox;
+  }
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.value = workspace.name;
+
+  const checkboxClasses = ['check'];
+
+  if (workspace.type === 'folder') {
+    checkboxClasses.push('folder');
+
+    if (!workspace.folder?.exists) {
+      checkboxClasses.push('folder-missing');
+    }
+  } else if (workspace.type === 'workspace') {
+    checkboxClasses.push('workspace');
+
+    if (workspace.folders?.some(f => !f.exists)) {
+      checkboxClasses.push('folder-missing');
+    }
+  } else if (workspace.type === 'remote') {
+    checkboxClasses.push('remote');
+  } else if (workspace.type === 'url') {
+    checkboxClasses.push('url');
+  } else {
+    checkboxClasses.push('broken');
+  }
+
+  checkbox.className = checkboxClasses.join(' ');
+  checkbox.addEventListener('click', event => {
+    event.stopPropagation();
+
+    handleCheckboxClick(checkbox, event.shiftKey);
+  });
+
+  checkbox.addEventListener('change', event => {
+    const checkedCheckboxes = document.querySelectorAll('input[type="checkbox"].check:checked');
+
+    if (selectAllCheckbox) {
+      selectAllCheckbox.checked =
+        document.querySelectorAll('input[type="checkbox"].check').length === checkedCheckboxes.length;
+    }
+
+    setSelectedCheckboxCount(checkedCheckboxes.length);
+  });
+
+  td.appendChild(checkbox);
+
+  return [checkbox, td];
+}
+
+function createNameCell(workspace) {
+  const td = document.createElement('td');
+  td.className = 'name';
+
+  const a = document.createElement('a');
+  a.href = 'javascript:';
+  a.textContent = workspace.name;
+
+  a.addEventListener('click', event => {
+    event.stopPropagation();
+
+    requestBrowseWorkspaceStorage(workspace.name);
+  });
+
+  td.appendChild(a);
+
+  return td;
+}
+
+function createStorageSizeCell(workspace) {
+  const td = document.createElement('td');
+  td.className = 'storage-size';
+
+  const a = document.createElement('a');
+  a.href = 'javascript:';
+  a.className = 'icon';
+  a.textContent = '🔍';
+  a.title = 'Get storage size';
+
+  a.addEventListener('click', event => {
+    event.stopPropagation();
+
+    requestStorageSize(workspace.name, td);
+  });
+
+  td.appendChild(a);
+
+  return td;
+}
+
+function getWorkspaceTypeName(workspace) {
+  switch (workspace.type) {
+    case 'folder':
+      return 'Folder';
+
+    case 'remote':
+      switch (workspace.remote.type) {
+        case 'dev-container':
+          return 'Remote (Dev Container)';
+        case 'github':
+          return 'Remote (GitHub Repository)';
+        case 'github-codespaces':
+          return 'Remote (GitHub Codespaces)';
+        case 'ssh':
+          return 'Remote (SSH)';
+        case 'wsl':
+          return 'Remote (WSL)';
+        default:
+          return 'Remote';
+      }
+
+    case 'workspace':
+      return 'Workspace';
+
+    default:
+      return 'Error';
+  }
+}
+
+function createTypeCell(workspace) {
+  const td = document.createElement('td');
+  td.className = 'type';
+
+  td.textContent = getWorkspaceTypeName(workspace);
+
+  return td;
+}
+
+function createPathCell(workspace) {
+  const td = document.createElement('td');
+  const classes = ['path'];
+
+  if (workspace.type === 'folder') {
+    classes.push('folder');
+
+    if (workspace.folder) {
+      const a = document.createElement('a');
+      a.href = 'javascript:';
+
+      if (workspace.folder.exists) {
+        a.textContent = workspace.folder.path;
+
+        classes.push('exists');
+      } else {
+        a.textContent = `${workspace.folder.path} ⛓️‍💥`;
+      }
+
+      a.addEventListener('click', event => {
+        event.stopPropagation();
+
+        requestBrowseFolder(workspace.folder.path);
+      });
+
+      td.appendChild(a);
+    } else {
+      td.textContent = 'Folder path not found in workspace.json';
+    }
+  } else if (workspace.type === 'workspace') {
+    fillWorkspacePathCell(workspace, td, classes);
+  } else if (workspace.type === 'remote') {
+    classes.push('remote');
+
+    td.textContent = workspace.remote.path;
+  } else {
+    classes.push('broken');
+
+    td.textContent = workspace.error;
+  }
+
+  td.className = classes.join(' ');
+
+  return td;
+}
+
+function fillWorkspacePathCell(workspace, td, classes) {
+  classes.push('workspace');
+
+  const divWorkspace = document.createElement('div');
+  divWorkspace.className = 'workspace';
+
+  const aCodeWorkspace = document.createElement('a');
+  aCodeWorkspace.href = 'javascript:';
+
+  if (workspace.workspace.exists) {
+    aCodeWorkspace.textContent = workspace.workspace.path;
+    classes.push('exists');
+  } else {
+    aCodeWorkspace.textContent = `${workspace.workspace.path} ⛓️‍💥`;
+  }
+
+  aCodeWorkspace.addEventListener('click', event => {
+    event.stopPropagation();
+    requestOpenFile(workspace.workspace.path);
+  });
+
+  divWorkspace.appendChild(aCodeWorkspace);
+  td.appendChild(divWorkspace);
+
+  if (workspace.workspace.folders && workspace.workspace.folders.length > 0) {
+    for (const folder of workspace.workspace.folders) {
+      const divFolder = document.createElement('div');
+      divFolder.className = 'folder';
+      divFolder.dataset.folder = folder.path;
+
+      const spanPath = document.createElement('span');
+      spanPath.className = 'path';
+
+      const aFolder = document.createElement('a');
+      aFolder.href = 'javascript:';
+
+      if (folder.exists) {
+        aFolder.textContent = folder.path;
+      } else {
+        aFolder.textContent = `${folder.path} ⛓️‍💥`;
+      }
+
+      aFolder.addEventListener('click', event => {
+        event.stopPropagation();
+        requestBrowseFolder(folder.path);
+      });
+
+      spanPath.appendChild(aFolder);
+      divFolder.appendChild(spanPath);
+
+      const spanSize = document.createElement('span');
+      spanSize.className = 'size';
+      spanSize.textContent = '-';
+      divFolder.appendChild(spanSize);
+
+      divFolder.dataset.folder = folder.path;
+      divFolder.dataset.folderExists = folder.exists;
+
+      td.appendChild(divFolder);
+    }
+  } else {
+    const divNoWorkspaceFolders = document.createElement('div');
+    divNoWorkspaceFolders.className = 'no-folder';
+    divNoWorkspaceFolders.textContent = `No folder found in ${workspace.workspace.path}`;
+    td.appendChild(divNoWorkspaceFolders);
+  }
+}
+
+function createWorkspaceSizeCell(workspace) {
+  const td = document.createElement('td');
+  td.className = 'workspace-size';
+
+  if (
+    (workspace.type === 'folder' && workspace.folder.exists) ||
+    (workspace.type === 'workspace' && workspace.workspace.folders.some(f => f.exists))
+  ) {
+    const a = document.createElement('a');
+    a.href = 'javascript:';
+    a.className = 'icon';
+    a.textContent = '🔍';
+    a.title = 'Get workspace size';
+
+    a.addEventListener('click', event => {
+      event.stopPropagation();
+
+      requestWorkspaceSize(workspace.name, td);
+    });
+
+    td.appendChild(a);
+  } else {
+    td.textContent = '-';
+  }
+
+  return td;
+}
+
+function createActionsCell(workspace) {
+  const td = document.createElement('td');
+  td.className = 'actions';
+
+  const a = document.createElement('a');
+  a.href = 'javascript:';
+  a.textContent = 'Delete';
+  a.title = 'Delete workspace storage';
+
+  a.addEventListener('click', event => {
+    event.stopPropagation();
+
+    onDelete(workspace.name);
+  });
+
+  td.appendChild(a);
+
+  return td;
+}
+
+function createWorkspaceRow(workspace) {
+  const tr = document.createElement('tr');
+  tr.id = workspace.name;
+  tr.dataset.workspace = workspace;
+
+  const [checkbox, tdCheckboxCell] = createCheckboxCell(workspace);
+
+  tr.appendChild(tdCheckboxCell);
+  tr.appendChild(createNameCell(workspace));
+  tr.appendChild(createStorageSizeCell(workspace));
+  tr.appendChild(createTypeCell(workspace));
+  tr.appendChild(createPathCell(workspace));
+  tr.appendChild(createWorkspaceSizeCell(workspace));
+  tr.appendChild(createActionsCell(workspace));
+
+  tr.addEventListener('click', event => {
+    checkbox.checked = !checkbox.checked;
+
+    const checkboxChangeEvent = new Event('change');
+
+    checkbox.dispatchEvent(checkboxChangeEvent);
+
+    handleCheckboxClick(checkbox, event.shiftKey);
+  });
+
+  return tr;
+}
 
 function setWorkspaces(workspaces) {
   const table = document.querySelector('table[id="workspaces"]');
@@ -180,265 +487,7 @@ function setWorkspaces(workspaces) {
   setSelectedCheckboxCount(0);
 
   for (const workspace of workspaces) {
-    const tr = document.createElement('tr');
-    tr.id = workspace.name;
-    tr.dataset.workspace = workspace;
-
-    const tdCheckbox = document.createElement('td');
-    tdCheckbox.className = 'checkbox';
-
-    function handleCheckboxClick(checkbox, shiftKey) {
-      if (!lastCheckedCheckbox) {
-        lastCheckedCheckbox = checkbox;
-        return;
-      }
-
-      if (shiftKey) {
-        const rowCheckboxes = document.querySelectorAll('input[type="checkbox"].check');
-
-        let start = indexOf.call(rowCheckboxes, checkbox);
-        let end = indexOf.call(rowCheckboxes, lastCheckedCheckbox);
-
-        if (start > end) {
-          [start, end] = [end, start];
-        }
-
-        for (let i = start; i <= end; i++) {
-          rowCheckboxes[i].checked = lastCheckedCheckbox.checked;
-        }
-      }
-
-      lastCheckedCheckbox = checkbox;
-    }
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.value = workspace.name;
-
-    const checkboxClasses = ['check'];
-
-    if (workspace.type === 'folder') {
-      checkboxClasses.push('folder');
-
-      if (!workspace.folder?.exists) {
-        checkboxClasses.push('folder-missing');
-      }
-    } else if (workspace.type === 'workspace') {
-      checkboxClasses.push('workspace');
-
-      if (workspace.folders?.some(f => !f.exists)) {
-        checkboxClasses.push('folder-missing');
-      }
-    } else if (workspace.type === 'remote') {
-      checkboxClasses.push('remote');
-    } else if (workspace.type === 'url') {
-      checkboxClasses.push('url');
-    } else {
-      checkboxClasses.push('broken');
-    }
-
-    checkbox.className = checkboxClasses.join(' ');
-    checkbox.addEventListener('click', event => {
-      event.stopPropagation();
-
-      handleCheckboxClick(checkbox, event.shiftKey);
-    });
-    checkbox.addEventListener('change', event => {
-      const checkedCheckboxes = document.querySelectorAll('input[type="checkbox"].check:checked');
-
-      if (selectAllCheckbox) {
-        selectAllCheckbox.checked =
-          document.querySelectorAll('input[type="checkbox"].check').length === checkedCheckboxes.length;
-      }
-
-      setSelectedCheckboxCount(checkedCheckboxes.length);
-    });
-    tdCheckbox.appendChild(checkbox);
-    tr.appendChild(tdCheckbox);
-
-    const tdName = document.createElement('td');
-    tdName.className = 'name';
-
-    const aBrowse = document.createElement('a');
-    aBrowse.href = 'javascript:';
-    aBrowse.textContent = workspace.name;
-    aBrowse.addEventListener('click', event => {
-      event.stopPropagation();
-
-      requestBrowseWorkspace(workspace.name);
-    });
-    tdName.appendChild(aBrowse);
-    tr.appendChild(tdName);
-
-    const tdStorageSize = document.createElement('td');
-    tdStorageSize.className = 'storage-size';
-
-    const aRequestStorageSize = document.createElement('a');
-    aRequestStorageSize.href = 'javascript:';
-    aRequestStorageSize.className = 'icon';
-    aRequestStorageSize.textContent = '🔍';
-    aRequestStorageSize.title = 'Get storage size';
-    aRequestStorageSize.addEventListener('click', event => {
-      event.stopPropagation();
-
-      requestStorageSize(workspace.name, tdStorageSize);
-    });
-    tdStorageSize.appendChild(aRequestStorageSize);
-    tr.appendChild(tdStorageSize);
-
-    const tdType = document.createElement('td');
-    tdType.className = 'type';
-    switch (workspace.type) {
-      case 'folder':
-        tdType.textContent = 'Folder';
-        break;
-      case 'remote':
-        switch (workspace.remote.type) {
-          case 'dev-container':
-            tdType.textContent = 'Remote (Dev Container)';
-            break;
-          case 'github':
-            tdType.textContent = 'Remote (GitHub Repository)';
-            break;
-          case 'github-codespaces':
-            tdType.textContent = 'Remote (GitHub Codespaces)';
-            break;
-          case 'ssh':
-            tdType.textContent = 'Remote (SSH)';
-            break;
-          case 'wsl':
-            tdType.textContent = 'Remote (WSL)';
-            break;
-          default:
-            tdType.textContent = 'Remote';
-            break;
-        }
-        break;
-      case 'workspace':
-        tdType.textContent = 'Workspace';
-        break;
-      default:
-        tdType.textContent = 'Error';
-        break;
-    }
-    tr.appendChild(tdType);
-
-    const tdPath = document.createElement('td');
-    const tdPathClasses = ['path'];
-
-    if (workspace.type === 'folder') {
-      tdPathClasses.push('folder');
-
-      if (workspace.folder) {
-        if (workspace.folder.exists) {
-          tdPath.textContent = workspace.folder.path;
-
-          tdPathClasses.push('exists');
-        } else {
-          tdPath.textContent = `${workspace.path} ⛓️‍💥`;
-        }
-      } else {
-        tdPath.textContent = 'Folder path not found';
-      }
-    } else if (workspace.type === 'workspace') {
-      tdPathClasses.push('workspace');
-
-      const divWorkspace = document.createElement('div');
-      divWorkspace.className = 'workspace';
-
-      if (workspace.workspace.exists) {
-        divWorkspace.textContent = workspace.workspace.path;
-      } else {
-        divWorkspace.textContent = `${workspace.workspace.path} ⛓️‍💥`;
-      }
-
-      tdPath.appendChild(divWorkspace);
-
-      if (workspace.workspace.folders && workspace.workspace.folders.length > 0) {
-        for (const folder of workspace.workspace.folders) {
-          const divFolder = document.createElement('div');
-          divFolder.className = 'folder';
-          divFolder.dataset.folder = folder.path;
-
-          const spanPath = document.createElement('span');
-          spanPath.className = 'path';
-          spanPath.textContent = folder.exists ? folder.path : `${folder.path} ⛓️‍💥`;
-          divFolder.appendChild(spanPath);
-
-          const spanSize = document.createElement('span');
-          spanSize.className = 'size';
-          spanSize.textContent = '-';
-          divFolder.appendChild(spanSize);
-
-          divFolder.dataset.folder = folder.path;
-          divFolder.dataset.folderExists = folder.exists;
-
-          tdPath.appendChild(divFolder);
-        }
-      } else {
-        tdPath.textContent = 'Workspace folders not found';
-      }
-    } else if (workspace.type === 'remote') {
-      tdPathClasses.push('remote');
-
-      tdPath.textContent = workspace.remote.path;
-    } else {
-      tdPathClasses.push('broken');
-
-      tdPath.textContent = workspace.error;
-    }
-
-    tdPath.className = tdPathClasses.join(' ');
-    tr.appendChild(tdPath);
-
-    const tdWorkspaceSize = document.createElement('td');
-    tdWorkspaceSize.className = 'workspace-size';
-
-    if (
-      (workspace.type === 'folder' && workspace.folder.exists) ||
-      (workspace.type === 'workspace' && workspace.workspace.folders.some(f => f.exists))
-    ) {
-      const aRequestWorkspaceSize = document.createElement('a');
-      aRequestWorkspaceSize.href = 'javascript:';
-      aRequestWorkspaceSize.className = 'icon';
-      aRequestWorkspaceSize.textContent = '🔍';
-      aRequestWorkspaceSize.title = 'Get workspace size';
-      aRequestWorkspaceSize.addEventListener('click', event => {
-        event.stopPropagation();
-
-        requestWorkspaceSize(workspace.name, tdWorkspaceSize);
-      });
-      tdWorkspaceSize.appendChild(aRequestWorkspaceSize);
-    } else {
-      tdWorkspaceSize.textContent = '-';
-    }
-
-    tr.appendChild(tdWorkspaceSize);
-
-    const tdActions = document.createElement('td');
-    tdActions.className = 'actions';
-
-    const aDelete = document.createElement('a');
-    aDelete.href = 'javascript:';
-    aDelete.textContent = 'Delete';
-    aDelete.title = 'Delete workspace storage';
-    aDelete.addEventListener('click', event => {
-      event.stopPropagation();
-
-      onDelete(workspace.name);
-    });
-    tdActions.appendChild(aDelete);
-    tr.appendChild(tdActions);
-
-    tr.addEventListener('click', event => {
-      checkbox.checked = !checkbox.checked;
-
-      const checkboxChangeEvent = new Event('change');
-
-      checkbox.dispatchEvent(checkboxChangeEvent);
-
-      handleCheckboxClick(checkbox, event.shiftKey);
-    });
+    const tr = createWorkspaceRow(workspace);
 
     tbody.appendChild(tr);
   }

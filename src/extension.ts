@@ -42,8 +42,13 @@ type WebviewMessage =
       command: 'get-all-workspace-sizes';
     }
   | {
-      command: 'browse-workspace';
+      command: 'browse-folder';
       name?: string;
+      path?: string;
+    }
+  | {
+      command: 'open-file';
+      path?: string;
     };
 
 export function activate(context: ExtensionContext) {
@@ -225,24 +230,47 @@ export function activate(context: ExtensionContext) {
 
           break;
 
-        case 'browse-workspace':
+        case 'browse-folder':
           {
-            if (!message.name) {
+            if (!message.name && !message.path) {
               return;
             }
 
-            const workspaceStoragePath = pathJoin(workspaceStorageRootPath!, message.name);
+            const folderPath = message.path ? message.path : pathJoin(workspaceStorageRootPath!, message.name!);
 
-            if (existsSync(workspaceStoragePath)) {
-              const success = env.openExternal(Uri.file(workspaceStoragePath));
+            if (existsSync(folderPath)) {
+              const success = await env.openExternal(Uri.file(folderPath));
 
               if (!success) {
-                window.showErrorMessage(`Could not open '${workspaceStoragePath}'`);
+                window.showErrorMessage(`Could not open folder '${folderPath}'`);
               }
+            }
+            else {
+              window.showErrorMessage(`Folder '${folderPath}' does not exist`);
             }
           }
 
           break;
+
+          case 'open-file':
+            {
+              if (!message.path) {
+                return;
+              }
+
+              if (existsSync(message.path)) {
+                const success = await commands.executeCommand('vscode.open', Uri.file(message.path));
+
+                if (!success) {
+                  window.showErrorMessage(`Could not open file '${message.path}'`);
+                }
+              }
+              else {
+                window.showErrorMessage(`File '${message.path}' does not exist`);
+              }
+            }
+
+            break;
       }
     }
 
