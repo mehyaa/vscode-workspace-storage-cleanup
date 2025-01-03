@@ -4,7 +4,7 @@ import { readFile, rmdir } from 'fs/promises';
 
 import { dirname, join as pathJoin } from 'path';
 
-import { commands, env, window, Uri, ViewColumn } from 'vscode';
+import { commands, env, window, Uri, ViewColumn, ProgressLocation } from 'vscode';
 
 import { getDirSizeAsync, getNonce } from './utils';
 
@@ -70,62 +70,38 @@ export function activate(context: ExtensionContext) {
     return pathJoin(vscodeProfilePath, 'workspaceStorage');
   }
 
-  async function removeMatchingWorkspaces(
-    context: ExtensionContext,
-    predicate: (w: WorkspaceInfo) => boolean | undefined
-  ) {
-    const workspaceStorageRootPath = getWorkspaceStorageRootPath(context);
+  const workspaceStorageRootPath = getWorkspaceStorageRootPath(context);
 
-    if (!workspaceStorageRootPath) {
-      return;
-    }
+  if (!workspaceStorageRootPath) {
+    window.showErrorMessage('Could not get workspace storage root path. Extension will not register commands.');
 
-    workspaces = await getWorkspacesAsync(workspaceStorageRootPath);
-
-    for (const workspace of workspaces) {
-      if (predicate(workspace)) {
-        try {
-          await rmdir(pathJoin(workspaceStorageRootPath, workspace.name), { recursive: true });
-        } catch (err) {
-          window.showErrorMessage(`Failed to remove workspace folder ${workspace.name}: ${(err as Error)?.message}`);
-        }
-      }
-    }
-
-    if (currentPanel) {
-      workspaces = await getWorkspacesAsync(workspaceStorageRootPath);
-
-      await postWorkspacesToWebview(workspaces);
-    }
+    return;
   }
 
   context.subscriptions.push(
     commands.registerCommand('workspace-storage-cleanup.show', () => showWorkspacePanelAsync(context)),
 
     commands.registerCommand('workspace-storage-cleanup.run-folder-missing', () =>
-      removeMatchingWorkspaces(context, w => w.folder && !w.folder.exists)
+      removeMatchingWorkspaces(w => w.folder && !w.folder.exists, 'Removing workspaces with missing folders...')
     ),
 
     commands.registerCommand('workspace-storage-cleanup.run-broken', () =>
-      removeMatchingWorkspaces(context, w => w.type === 'error')
+      removeMatchingWorkspaces(w => w.type === 'error', 'Removing workspaces with errors...')
     ),
 
     commands.registerCommand('workspace-storage-cleanup.run-empty', () =>
-      removeMatchingWorkspaces(context, w => w.workspace && w.workspace.folders.length === 0)
+      removeMatchingWorkspaces(
+        w => w.workspace && w.workspace.folders.length === 0,
+        'Removing workspaces with empty folders...'
+      )
     ),
 
     commands.registerCommand('workspace-storage-cleanup.run-remote', () =>
-      removeMatchingWorkspaces(context, w => w.type === 'remote')
+      removeMatchingWorkspaces(w => w.type === 'remote', 'Removing remote workspaces...')
     )
   );
 
   async function showWorkspacePanelAsync(context: ExtensionContext): Promise<void> {
-    const workspaceStorageRootPath = getWorkspaceStorageRootPath(context);
-
-    if (!workspaceStorageRootPath) {
-      return;
-    }
-
     async function handleWebviewMessage(message: WebviewMessage): Promise<void> {
       switch (message.command) {
         case 'refresh':
@@ -139,29 +115,42 @@ export function activate(context: ExtensionContext) {
 
         case 'delete':
           if (message.workspaces && message.workspaces.length > 0) {
-            const errorMessages: Array<string> = [];
+            await window.withProgress(
+              {
+                location: ProgressLocation.Notification,
+                title: 'Deleting selected workspaces...',
+                cancellable: false
+              },
+              async () => {
+                const errorMessages: Array<string> = [];
 
-            for (const workspace of message.workspaces) {
-              const dirPath = pathJoin(workspaceStorageRootPath!, workspace);
-
-              try {
-                await rmdir(dirPath, { recursive: true });
-              } catch (err) {
-                const error = err as Error;
-
-                if (error) {
-                  errorMessages.push(error.message);
+                if (!message.workspaces || message.workspaces.length === 0) {
+                  return;
                 }
+
+                for (const workspace of message.workspaces) {
+                  const dirPath = pathJoin(workspaceStorageRootPath!, workspace);
+
+                  try {
+                    await rmdir(dirPath, { recursive: true });
+                  } catch (err) {
+                    const error = err as Error;
+
+                    if (error) {
+                      errorMessages.push(error.message);
+                    }
+                  }
+                }
+
+                if (errorMessages.length > 0) {
+                  window.showErrorMessage(errorMessages.join('\n'));
+                }
+
+                workspaces = await getWorkspacesAsync(workspaceStorageRootPath!);
+
+                await postWorkspacesToWebview(workspaces);
               }
-            }
-
-            if (errorMessages.length > 0) {
-              window.showErrorMessage(errorMessages.join('\n'));
-            }
-
-            workspaces = await getWorkspacesAsync(workspaceStorageRootPath!);
-
-            await postWorkspacesToWebview(workspaces);
+            );
           }
 
           break;
@@ -244,33 +233,31 @@ export function activate(context: ExtensionContext) {
               if (!success) {
                 window.showErrorMessage(`Could not open folder '${folderPath}'`);
               }
-            }
-            else {
+            } else {
               window.showErrorMessage(`Folder '${folderPath}' does not exist`);
             }
           }
 
           break;
 
-          case 'open-file':
-            {
-              if (!message.path) {
-                return;
-              }
-
-              if (existsSync(message.path)) {
-                const success = await commands.executeCommand('vscode.open', Uri.file(message.path));
-
-                if (!success) {
-                  window.showErrorMessage(`Could not open file '${message.path}'`);
-                }
-              }
-              else {
-                window.showErrorMessage(`File '${message.path}' does not exist`);
-              }
+        case 'open-file':
+          {
+            if (!message.path) {
+              return;
             }
 
-            break;
+            if (existsSync(message.path)) {
+              const success = await commands.executeCommand('vscode.open', Uri.file(message.path));
+
+              if (!success) {
+                window.showErrorMessage(`Could not open file '${message.path}'`);
+              }
+            } else {
+              window.showErrorMessage(`File '${message.path}' does not exist`);
+            }
+          }
+
+          break;
       }
     }
 
@@ -423,6 +410,37 @@ export function activate(context: ExtensionContext) {
         window.showErrorMessage(`Failed to post workspace sizes to webview: ${(err as Error)?.message}`);
       }
     }
+  }
+
+  async function removeMatchingWorkspaces(predicate: (w: WorkspaceInfo) => boolean | undefined, message: string) {
+    return window.withProgress(
+      {
+        location: ProgressLocation.Notification,
+        title: message,
+        cancellable: false
+      },
+      async () => {
+        workspaces = await getWorkspacesAsync(workspaceStorageRootPath!);
+
+        for (const workspace of workspaces) {
+          if (predicate(workspace)) {
+            try {
+              await rmdir(pathJoin(workspaceStorageRootPath!, workspace.name), { recursive: true });
+            } catch (err) {
+              window.showErrorMessage(
+                `Failed to remove workspace folder ${workspace.name}: ${(err as Error)?.message}`
+              );
+            }
+          }
+        }
+
+        if (currentPanel) {
+          workspaces = await getWorkspacesAsync(workspaceStorageRootPath!);
+
+          await postWorkspacesToWebview(workspaces);
+        }
+      }
+    );
   }
 }
 
