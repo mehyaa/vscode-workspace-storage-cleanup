@@ -151,6 +151,7 @@ Icon made by [Flat Icons][icon-author-url] from [flaticon.com][icon-url]
 [releases-url]: https://github.com/mehyaa/vscode-workspace-storage-cleanup/releases
 [discussions-url]: https://github.com/mehyaa/vscode-workspace-storage-cleanup/discussions
 [issues-url]: https://github.com/mehyaa/vscode-workspace-storage-cleanup/issues
+[build-status-badge-url]: https://github.com/mehyaa/vscode-workspace-storage-cleanup/actions/workflows/build.yml/badge.svg
 [marketplace-url]: https://marketplace.visualstudio.com/items?itemName=mehyaa.workspace-storage-cleanup
 [icon-url]: https://www.flaticon.com/free-icon/data-cleaning_1808958
 [icon-author-url]: https://www.flaticon.com/authors/flat-icons
