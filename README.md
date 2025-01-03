@@ -1,13 +1,13 @@
 # VS Code Workspace Storage Cleanup Extension
 
-![Build Status](build-status-badge-url)
+![Build Status][build-status-badge-url]
 
 ## Overview
 
 The **Workspace Storage Cleanup** extension for Visual Studio Code is designed to help users manage and clean up workspace storage files effortlessly. These files can accumulate over time and occupy significant disk space, potentially slowing down the IDE. With this extension, developers can streamline their workspace by removing unnecessary storage files, improving performance and maintaining a clutter-free development environment.
 
-- **Extension URL**: [VS Marketplace](marketplace-url)
-- **Source Code**: [GitHub Repository](repo-url)
+- **Extension URL**: [VS Marketplace][marketplace-url]
+- **Source Code**: [GitHub Repository][repo-url]
 
 ---
 
@@ -45,7 +45,7 @@ Visual Studio Code keeps a dedicated storage folder for each workspace (folder, 
 
 ### From the VSIX File
 
-1. Download the latest `.vsix` file from the [GitHub Releases](releases-url).
+1. Download the latest `.vsix` file from the [GitHub Releases][releases-url].
 2. Open VS Code.
 3. Press `Ctrl+Shift+P` to open the Command Palette and type `Extensions: Install from VSIX`.
 4. Select the downloaded `.vsix` file to install.
@@ -84,7 +84,7 @@ The extension provides several commands to manage storage:
 We welcome contributions to improve the extension! To get started:
 
 1. **Fork the Repository**:
-   - Go to the [GitHub Repository](repo-url).
+   - Go to the [GitHub Repository][repo-url].
    - Click the **Fork** button to create your own copy of the repository.
 
 2. **Clone Your Fork**:
@@ -122,13 +122,13 @@ We welcome contributions to improve the extension! To get started:
 
 ### Reporting Issues
 
-- Use the [GitHub Issues page](issues-url) to report bugs or suggest new features.
+- Use the [GitHub Issues page][issues-url] to report bugs or suggest new features.
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](license-url).
+This project is licensed under the [MIT License][license-url].
 
 ---
 
@@ -136,8 +136,8 @@ This project is licensed under the [MIT License](license-url).
 
 If you encounter any issues or have questions about the extension, feel free to:
 
-- Open a discussion on [GitHub Discussions](discussions-url).
-- Reach out via the [Marketplace Page](marketplace-url).
+- Open a discussion on [GitHub Discussions][discussions-url].
+- Reach out via the [Marketplace Page][marketplace-url].
 
 ---
 
@@ -151,7 +151,6 @@ Icon made by [Flat Icons][icon-author-url] from [flaticon.com][icon-url]
 [releases-url]: https://github.com/mehyaa/vscode-workspace-storage-cleanup/releases
 [discussions-url]: https://github.com/mehyaa/vscode-workspace-storage-cleanup/discussions
 [issues-url]: https://github.com/mehyaa/vscode-workspace-storage-cleanup/issues
-[build-status-badge-url]: https://github.com/mehyaa/vscode-workspace-storage-cleanup/actions/workflows/build.yml/badge.svg
 [marketplace-url]: https://marketplace.visualstudio.com/items?itemName=mehyaa.workspace-storage-cleanup
 [icon-url]: https://www.flaticon.com/free-icon/data-cleaning_1808958
 [icon-author-url]: https://www.flaticon.com/authors/flat-icons
