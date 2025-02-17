@@ -49,6 +49,15 @@ jobs:
           pat: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
           registryUrl: https://marketplace.visualstudio.com
           extensionFile: "${{ steps.pack_extension.outputs.vsixPath }}"
+          skipDuplicate: true
+
+      - name: Publish Extension to Open VSX Registry
+        if: github.event_name != 'pull_request'
+        uses: HaaLeo/publish-vscode-extension@v1
+        with:
+          pat: ${{ secrets.OPEN_VSX_TOKEN }}
+          extensionFile: "${{ steps.pack_extension.outputs.vsixPath }}"
+          skipDuplicate: true
 
       - name: Create Release
         if: github.event_name == 'push'
