@@ -1,6 +1,10 @@
 const indexOf = Array.prototype.indexOf;
 const map = Array.prototype.map;
 
+// Sort state
+let currentSortColumn = null;
+let currentSortDirection = 'asc';
+
 const spinnerSvg =
   '<svg class="spinner" width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
   '<path d="M10.14,1.16a11,11,0,0,0-9,8.92A1.59,1.59,0,0,0,2.46,12,1.52,1.52,0,0,0,4.11,10.7a8,8,0,0,1,6.66-6.61A1.42,1.42,0,0,0,12,2.69h0A1.57,1.57,0,0,0,10.14,1.16Z" />' +
@@ -200,6 +204,7 @@ function createCheckboxCell(workspace) {
 function createNameCell(workspace) {
   const td = document.createElement('td');
   td.className = 'name';
+  td.dataset.sortValue = workspace.name.toLowerCase();
 
   const a = document.createElement('a');
   a.href = 'javascript:';
@@ -219,6 +224,7 @@ function createNameCell(workspace) {
 function createStorageSizeCell(workspace) {
   const td = document.createElement('td');
   td.className = 'storage-size';
+  td.dataset.sortValue = '-1';
 
   const a = document.createElement('a');
   a.href = 'javascript:';
@@ -269,15 +275,30 @@ function getWorkspaceTypeName(workspace) {
 function createTypeCell(workspace) {
   const td = document.createElement('td');
   td.className = 'type';
+  td.dataset.sortValue = getWorkspaceTypeName(workspace).toLowerCase();
 
   td.textContent = getWorkspaceTypeName(workspace);
 
   return td;
 }
 
+function getWorkspaceSortPath(workspace) {
+  switch (workspace.type) {
+    case 'folder':
+      return (workspace.folder && workspace.folder.path) ? workspace.folder.path.toLowerCase() : '';
+    case 'workspace':
+      return (workspace.workspace && workspace.workspace.path) ? workspace.workspace.path.toLowerCase() : '';
+    case 'remote':
+      return workspace.remote ? workspace.remote.path.toLowerCase() : '';
+    default:
+      return workspace.error ? workspace.error.toLowerCase() : '';
+  }
+}
+
 function createPathCell(workspace) {
   const td = document.createElement('td');
   const classes = ['path'];
+  td.dataset.sortValue = getWorkspaceSortPath(workspace);
 
   if (workspace.type === 'folder') {
     classes.push('folder');
@@ -399,6 +420,7 @@ function fillWorkspacePathCell(workspace, td, classes) {
 function createWorkspaceSizeCell(workspace) {
   const td = document.createElement('td');
   td.className = 'workspace-size';
+  td.dataset.sortValue = '-1';
 
   if (
     (workspace.type === 'folder' && workspace.folder.exists) ||
@@ -534,6 +556,7 @@ function setStorageSizeOnTable(name, size) {
   }
 
   td.textContent = humanFileSize(size);
+  td.dataset.sortValue = String(size);
 }
 
 function setWorkspaceSizeOnTable(name, size) {
@@ -556,6 +579,7 @@ function setWorkspaceSizeOnTable(name, size) {
   }
 
   td.textContent = humanFileSize(size);
+  td.dataset.sortValue = String(size);
 }
 
 function setWorkspaceSizesOnTable(name, entries) {
@@ -608,6 +632,7 @@ function setWorkspaceSizesOnTable(name, entries) {
   }
 
   tdWorkspaceSize.textContent = humanFileSize(totalSize);
+  tdWorkspaceSize.dataset.sortValue = String(totalSize);
 }
 
 let currentWorkspaces = [];
@@ -621,6 +646,11 @@ window.addEventListener('message', event => {
         currentWorkspaces = message.workspaces ?? [];
 
         setWorkspaces(currentWorkspaces);
+
+        // Re-apply current sort after data refresh
+        if (currentSortColumn !== null) {
+          sortTableByColumn(currentSortColumn, currentSortDirection);
+        }
       }
 
       break;
@@ -647,6 +677,99 @@ window.addEventListener('message', event => {
       break;
   }
 });
+
+// Column index mapping for sortable columns
+const sortableColumns = {
+  1: 'name',
+  2: 'storage-size',
+  3: 'type',
+  4: 'path',
+  5: 'workspace-size'
+};
+
+// Size columns use numeric comparison
+const numericSortColumns = new Set([2, 5]);
+
+function getSortValue(row, columnIndex) {
+  const cells = row.querySelectorAll('td');
+  const cell = cells[columnIndex];
+
+  if (!cell) {
+    return '';
+  }
+
+  return cell.dataset.sortValue ?? '';
+}
+
+function sortTableByColumn(columnIndex, direction) {
+  const tbody = document.querySelector('#workspaces tbody');
+
+  if (!tbody) {
+    return;
+  }
+
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+
+  const isNumeric = numericSortColumns.has(columnIndex);
+  const multiplier = direction === 'asc' ? 1 : -1;
+
+  rows.sort((a, b) => {
+    const aVal = getSortValue(a, columnIndex);
+    const bVal = getSortValue(b, columnIndex);
+
+    if (isNumeric) {
+      const aNum = Number.parseFloat(aVal);
+      const bNum = Number.parseFloat(bVal);
+
+      return (aNum - bNum) * multiplier;
+    }
+
+    return aVal.localeCompare(bVal) * multiplier;
+  });
+
+  // Re-append rows in sorted order (moves DOM nodes, preserves all state)
+  rows.forEach(row => tbody.appendChild(row));
+}
+
+function updateSortIndicators(columnIndex, direction) {
+  const headers = document.querySelectorAll('#workspaces thead th');
+
+  headers.forEach((th, i) => {
+    th.classList.remove('sort-asc', 'sort-desc', 'sorted');
+
+    if (i === columnIndex) {
+      th.classList.add('sorted', direction === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+  });
+}
+
+function onHeaderClick(columnIndex) {
+  if (currentSortColumn === columnIndex) {
+    // Toggle direction
+    currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+  } else {
+    currentSortColumn = columnIndex;
+    currentSortDirection = 'asc';
+  }
+
+  sortTableByColumn(currentSortColumn, currentSortDirection);
+  updateSortIndicators(currentSortColumn, currentSortDirection);
+}
+
+function initializeSortableHeaders() {
+  const headers = document.querySelectorAll('#workspaces thead th');
+
+  headers.forEach((th, index) => {
+    if (sortableColumns[index]) {
+      th.classList.add('sortable');
+
+      th.addEventListener('click', event => {
+        event.stopPropagation();
+        onHeaderClick(index);
+      });
+    }
+  });
+}
 
 function initializeEvents() {
   const selectFolderMissingButton = document.getElementById('select-folder-missing');
@@ -712,6 +835,8 @@ function initializeEvents() {
   if (deleteSelectedButton) {
     deleteSelectedButton.addEventListener('click', onDeleteSelected);
   }
+
+  initializeSortableHeaders();
 
   onRefresh();
 }
